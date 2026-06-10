@@ -431,6 +431,10 @@ let savedPlaces = [];
 
 // ── PREMIUM STATE ──────────────────────────────────────────────
 const FREE_AI_LIFETIME_LIMIT = 3;
+const PREMIUM_WHITELIST = [
+  '0x6518fd07b3da01b17bd37d7c40f9a5e3c87a09ba',  // owner / testing
+  '0x729fea1d8ca343f26c4cc743a4e1898d65ce6a76'   // dApp wallet / testing
+];
 let premiumWallet    = null;   // connected wallet address
 let isPremiumActive  = false;  // subscription is live
 let premiumExpiresAt = null;
@@ -477,6 +481,14 @@ async function connectWalletForPremium() {
   try {
     var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     premiumWallet = accounts[0];
+    // Whitelisted wallets get permanent premium
+    if (isWhitelisted(premiumWallet)) {
+      isPremiumActive = true;
+      savePremiumState();
+      updateAiCounter();
+      closePremiumModal();
+      return;
+    }
     // Check if already subscribed
     var r = await fetch(BACKEND + '/api/lw/subscription/' + premiumWallet);
     var sub = await r.json();
@@ -539,15 +551,22 @@ function savePremiumState() {
   } catch(e) {}
 }
 
+function isWhitelisted(addr) {
+  return addr && PREMIUM_WHITELIST.indexOf(addr.toLowerCase()) !== -1;
+}
+
 function loadPremiumState() {
   try {
     var s = JSON.parse(localStorage.getItem('lw_premium') || '{}');
-    if (!s.wallet || !s.expires_at) return;
+    if (!s.wallet) return;
+    premiumWallet = s.wallet;
+    // Whitelisted wallets always get premium — no expiry check
+    if (isWhitelisted(s.wallet)) { isPremiumActive = true; updateAiCounter(); return; }
+    if (!s.expires_at) return;
     // Check expiry
     if (s.expires_at && s.expires_at < Math.floor(Date.now()/1000)) {
       localStorage.removeItem('lw_premium'); return;
     }
-    premiumWallet = s.wallet;
     // Re-verify with server in background
     fetch(BACKEND + '/api/lw/subscription/' + premiumWallet)
       .then(function(r) { return r.json(); })
