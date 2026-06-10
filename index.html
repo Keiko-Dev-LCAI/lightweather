@@ -670,13 +670,15 @@ function escHtml(s) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// INIT — auto-detect language
+// INIT — auto-detect language + auto-load local weather
 // ════════════════════════════════════════════════════════════════
 (function() {
   var nav = navigator.language || 'en';
   var lang = nav.split('-')[0].toLowerCase();
   if (['en','zh','es','fr','ja','ko'].includes(lang)) setLanguage(lang);
   else setLanguage('en');
+  // Auto-load local weather on page open
+  getLocation();
 })();
 </script>
 </body>
