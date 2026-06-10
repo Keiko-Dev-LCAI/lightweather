@@ -430,33 +430,26 @@ let alertDismissed = false;
 let savedPlaces = [];
 
 // ── PREMIUM STATE ──────────────────────────────────────────────
-const FREE_AI_DAILY_LIMIT = 10;
+const FREE_AI_LIFETIME_LIMIT = 3;
 let premiumWallet    = null;   // connected wallet address
 let isPremiumActive  = false;  // subscription is live
 let premiumExpiresAt = null;
 
-function getAiDailyUsage() {
-  var today = new Date().toISOString().split('T')[0];
-  try {
-    var s = JSON.parse(localStorage.getItem('lw_ai_daily') || '{}');
-    if (s.date !== today) return { count: 0, date: today };
-    return s;
-  } catch(e) { return { count: 0, date: today }; }
+function getAiLifetimeUsage() {
+  try { return parseInt(localStorage.getItem('lw_ai_lifetime') || '0', 10); } catch(e) { return 0; }
 }
-function setAiDailyUsage(count) {
-  var today = new Date().toISOString().split('T')[0];
-  try { localStorage.setItem('lw_ai_daily', JSON.stringify({ count: count, date: today })); } catch(e) {}
+function setAiLifetimeUsage(count) {
+  try { localStorage.setItem('lw_ai_lifetime', String(count)); } catch(e) {}
 }
 function aiMessagesLeft() {
   if (isPremiumActive) return 999;
-  var usage = getAiDailyUsage();
-  return Math.max(0, FREE_AI_DAILY_LIMIT - usage.count);
+  return Math.max(0, FREE_AI_LIFETIME_LIMIT - getAiLifetimeUsage());
 }
 function consumeAiMessage() {
   if (isPremiumActive) return true;
-  var usage = getAiDailyUsage();
-  if (usage.count >= FREE_AI_DAILY_LIMIT) return false;
-  setAiDailyUsage(usage.count + 1);
+  var used = getAiLifetimeUsage();
+  if (used >= FREE_AI_LIFETIME_LIMIT) return false;
+  setAiLifetimeUsage(used + 1);
   updateAiCounter();
   return true;
 }
@@ -469,8 +462,8 @@ function updateAiCounter() {
     return;
   }
   var left = aiMessagesLeft();
-  el.textContent = left + ' free AI messages remaining today';
-  el.className = 'ai-counter' + (left <= 3 ? ' low' : '');
+  el.textContent = left + ' free AI messages remaining';
+  el.className = 'ai-counter' + (left <= 1 ? ' low' : '');
 }
 
 // ── WALLET + SUBSCRIPTION ──────────────────────────────────────
