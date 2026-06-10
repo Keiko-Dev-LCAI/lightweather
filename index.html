@@ -111,20 +111,47 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .uv-bar { width: 100%; height: 8px; border-radius: 4px; background: linear-gradient(to right, #4caf7d, #e8c050, #e8904b, #e84b6a); margin-top: 6px; position: relative; }
 .uv-dot { width: 14px; height: 14px; background: #fff; border-radius: 50%; position: absolute; top: -3px; transform: translateX(-50%); box-shadow: 0 0 4px rgba(0,0,0,0.5); }
 
-/* ── AI EXPLANATION ── */
+/* ── AI CHAT ── */
 .ai-section { margin: 0 20px 20px; }
-.ai-btn {
+.ai-toggle-btn {
   width: 100%; background: var(--purple-glow); border: 1px solid var(--purple);
   border-radius: 14px; color: var(--text); font-size: 44px; padding: 16px;
   cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px;
 }
-.ai-btn:active { opacity: 0.8; }
-.ai-result {
-  background: var(--bg2); border: 1px solid var(--purple);
-  border-radius: 14px; padding: 20px 22px; margin-top: 12px;
-  font-size: 44px; line-height: 1.65; color: var(--text); display: none;
+.ai-toggle-btn:active { opacity: 0.8; }
+.ai-chat-panel {
+  border: 1px solid var(--purple); border-radius: 14px; margin-top: 12px; overflow: hidden; display: none;
 }
-.ai-result.show { display: block; }
+.ai-chat-panel.open { display: block; }
+.ai-chat-log {
+  background: var(--bg2); padding: 16px 18px; max-height: 420px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.ai-msg { display: flex; gap: 10px; align-items: flex-start; }
+.ai-msg.user { flex-direction: row-reverse; }
+.ai-bubble {
+  background: var(--bg3); border-radius: 14px; padding: 12px 16px;
+  font-size: 36px; line-height: 1.6; max-width: 85%;
+}
+.ai-msg.user .ai-bubble { background: var(--purple-glow); border: 1px solid var(--purple); }
+.ai-msg.bot  .ai-bubble { border: 1px solid var(--border); }
+.ai-msg.typing .ai-bubble { color: var(--text2); font-style: italic; }
+.ai-avatar { font-size: 40px; flex-shrink: 0; margin-top: 4px; }
+.ai-chat-input-row {
+  display: flex; gap: 10px; padding: 12px 14px; background: var(--bg3);
+  border-top: 1px solid var(--border);
+}
+.ai-chat-input {
+  flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text); font-size: 36px; padding: 10px 14px; outline: none;
+}
+.ai-chat-input:focus { border-color: var(--purple); }
+.ai-send-btn {
+  background: var(--purple); border: none; border-radius: 12px;
+  color: #fff; font-size: 40px; padding: 10px 18px; cursor: pointer;
+}
+.ai-send-btn:active { opacity: 0.8; }
+.ai-send-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── FORECAST ── */
 .forecast-section { padding: 0 20px 20px; }
@@ -186,8 +213,8 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .place-item-info { flex: 1; min-width: 0; }
 .place-label { font-size: 40px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .place-sub { font-size: 30px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.place-del { background: none; border: none; color: var(--text2); font-size: 44px; padding: 4px 8px; cursor: pointer; line-height: 1; }
-.place-del:hover { color: var(--red); }
+.place-del { background: rgba(232,75,106,0.15); border: 1px solid rgba(232,75,106,0.4); border-radius: 10px; color: var(--red); font-size: 34px; padding: 8px 14px; cursor: pointer; font-weight: 700; white-space: nowrap; }
+.place-del:hover { background: rgba(232,75,106,0.3); }
 
 /* ── SAVE MODAL ── */
 .modal-overlay {
@@ -327,7 +354,7 @@ function renderPlacesPanel() {
         '<div class="place-label">' + escHtml(p.label) + '</div>' +
         '<div class="place-sub">' + escHtml(p.cityDisplay || p.q) + '</div>' +
       '</div>' +
-      '<button class="place-del" onclick="deleteSavedPlace(event,' + i + ')">✕</button>' +
+      '<button class="place-del" onclick="deleteSavedPlace(event,' + i + ')">🗑 Delete</button>' +
     '</div>';
   }).join('');
   panel.innerHTML = '<div class="places-header">📌 Saved Places</div>' + items;
@@ -370,6 +397,9 @@ function confirmSavePlace() {
   savedPlaces.push({ label: label, q: currentQuery, cityDisplay: cityDisplay });
   writeSavedPlaces();
   closeSaveModal();
+  // Refresh the places panel if it's already open (fixes stale "No saved places" display)
+  var panel = document.getElementById('places-panel');
+  if (panel && panel.classList.contains('open')) renderPlacesPanel();
   // Brief confirmation on the ⭐ button
   var btn = document.getElementById('save-place-btn');
   if (btn) { btn.textContent = '✅ Saved!'; setTimeout(function() { if (btn) btn.textContent = '⭐ Save Place'; }, 1800); }
@@ -645,6 +675,7 @@ function getLocation() {
 // ════════════════════════════════════════════════════════════════
 async function loadWeather(q) {
   currentQuery = q;
+  resetAiChat();
   showLoading();
   alertDismissed = false;
   document.getElementById('alert-banner').classList.remove('show');
@@ -745,10 +776,16 @@ function renderWeather(data) {
     '</div>' +
   '</div>' +
 
-  // AI button
+  // AI Chat
   '<div class="ai-section">' +
-    '<button class="ai-btn" id="ai-btn" onclick="explainForecast()">' + t('ai_btn') + '</button>' +
-    '<div class="ai-result" id="ai-result"></div>' +
+    '<button class="ai-toggle-btn" id="ai-toggle-btn" onclick="toggleAiChat()">' + t('ai_btn') + '</button>' +
+    '<div class="ai-chat-panel" id="ai-chat-panel">' +
+      '<div class="ai-chat-log" id="ai-chat-log"></div>' +
+      '<div class="ai-chat-input-row">' +
+        '<input class="ai-chat-input" id="ai-chat-input" type="text" placeholder="Ask anything about the weather…" maxlength="200" onkeydown="if(event.key===\'Enter\')sendAiMessage()">' +
+        '<button class="ai-send-btn" id="ai-send-btn" onclick="sendAiMessage()">➤</button>' +
+      '</div>' +
+    '</div>' +
   '</div>' +
 
   // Sunrise / Sunset
@@ -805,53 +842,144 @@ function almanacUrl() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// AI EXPLANATION
+// AI WEATHER CHAT
 // ════════════════════════════════════════════════════════════════
-async function explainForecast() {
-  if (!currentWeatherData) return;
-  var btn = document.getElementById('ai-btn');
-  var res = document.getElementById('ai-result');
-  if (!btn || !res) return;
-  btn.textContent = t('ai_loading');
-  btn.disabled = true;
-  res.classList.remove('show');
+var aiChatOpen = false;
+var aiChatHistory = [];  // {role:'user'|'assistant', text:'...'}
+var aiWeatherContext = '';
 
+function buildWeatherContext() {
+  if (!currentWeatherData) return '';
   var d = currentWeatherData;
-  var cur = d.current;
-  var fc  = d.forecast.forecastday;
-  var loc = d.location;
+  var cur = d.current, fc = d.forecast.forecastday, loc = d.location;
   var alerts = (d.alerts && d.alerts.alert) || [];
+  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var week = fc.map(function(day) {
+    var dt = new Date(day.date + 'T12:00:00');
+    return days[dt.getDay()] + ': ' + day.day.condition.text + ', high ' + Math.round(day.day.maxtemp_c) + '°C (' + Math.round(day.day.maxtemp_c*9/5+32) + '°F), low ' + Math.round(day.day.mintemp_c) + '°C (' + Math.round(day.day.mintemp_c*9/5+32) + '°F)' +
+      (day.day.daily_chance_of_rain > 10 ? ', ' + day.day.daily_chance_of_rain + '% rain' : '') +
+      (day.day.pollen_tree ? ', tree pollen: ' + day.day.pollen_tree : '') +
+      (day.day.pollen_grass ? ', grass pollen: ' + day.day.pollen_grass : '');
+  }).join('\n');
+  var alertLine = alerts.length ? '\nACTIVE ALERT: ' + (alerts[0].event || '') + ' — ' + (alerts[0].headline || '') + '\n' : '';
+  return 'CURRENT WEATHER for ' + loc.name + ', ' + (loc.region || '') + ', ' + loc.country + ':\n' +
+    'Right now: ' + Math.round(cur.temp_c) + '°C (' + Math.round(cur.temp_c*9/5+32) + '°F), ' + cur.condition.text + ', feels like ' + Math.round(cur.feelslike_c) + '°C (' + Math.round(cur.feelslike_c*9/5+32) + '°F)\n' +
+    'Humidity: ' + cur.humidity + '%, Wind: ' + cur.wind_kph + ' km/h (' + Math.round(cur.wind_kph*0.621) + ' mph) ' + cur.wind_dir + ', UV: ' + cur.uv + '\n' +
+    'Visibility: ' + cur.vis_km + ' km (' + Math.round(cur.vis_km*0.621) + ' mi), Pressure: ' + cur.pressure_mb + ' mb\n' +
+    alertLine +
+    '7-DAY FORECAST:\n' + week;
+}
 
-  var weekSummary = fc.map(function(day) {
-    var date = new Date(day.date + 'T12:00:00');
-    var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    return days[date.getDay()] + ': ' + day.day.condition.text + ', high ' + Math.round(day.day.maxtemp_c) + '°C / low ' + Math.round(day.day.mintemp_c) + '°C' +
-      (day.day.daily_chance_of_rain > 20 ? ', ' + day.day.daily_chance_of_rain + '% rain' : '');
+function toggleAiChat() {
+  var panel = document.getElementById('ai-chat-panel');
+  var btn   = document.getElementById('ai-toggle-btn');
+  if (!panel || !btn) return;
+  aiChatOpen = !aiChatOpen;
+  panel.classList.toggle('open', aiChatOpen);
+  if (aiChatOpen) {
+    // Send an automatic greeting/explanation on first open
+    if (aiChatHistory.length === 0) {
+      aiWeatherContext = buildWeatherContext();
+      btn.textContent = t('ai_loading');
+      btn.disabled = true;
+      sendAiRequest('Please give me a friendly 2–3 sentence overview of today\'s weather and what to expect this week. Mention any alerts. Respond in language code: ' + currentLang, true).finally(function() {
+        btn.textContent = t('ai_btn');
+        btn.disabled = false;
+      });
+    }
+    setTimeout(function() {
+      var input = document.getElementById('ai-chat-input');
+      if (input) input.focus();
+    }, 200);
+  }
+}
+
+function renderChatLog() {
+  var log = document.getElementById('ai-chat-log');
+  if (!log) return;
+  log.innerHTML = aiChatHistory.map(function(msg) {
+    if (msg.role === 'user') {
+      return '<div class="ai-msg user"><div class="ai-bubble">' + escHtml(msg.text) + '</div><div class="ai-avatar">👤</div></div>';
+    } else {
+      return '<div class="ai-msg bot"><div class="ai-avatar">🤖</div><div class="ai-bubble">' + escHtml(msg.text) + '</div></div>';
+    }
+  }).join('') + '<div id="ai-typing-anchor" style="height:1px"></div>';
+  var anchor = document.getElementById('ai-typing-anchor');
+  if (anchor) anchor.scrollIntoView({behavior:'smooth'});
+}
+
+function showTyping() {
+  var log = document.getElementById('ai-chat-log');
+  if (!log) return;
+  var el = document.createElement('div');
+  el.className = 'ai-msg typing';
+  el.id = 'ai-typing-bubble';
+  el.innerHTML = '<div class="ai-avatar">🤖</div><div class="ai-bubble">Thinking…</div>';
+  log.appendChild(el);
+  el.scrollIntoView({behavior:'smooth'});
+}
+
+function removeTyping() {
+  var el = document.getElementById('ai-typing-bubble');
+  if (el) el.remove();
+}
+
+async function sendAiRequest(userText, isAuto) {
+  if (!isAuto) {
+    aiChatHistory.push({role:'user', text: userText});
+    renderChatLog();
+  }
+  showTyping();
+  var sendBtn = document.getElementById('ai-send-btn');
+  if (sendBtn) sendBtn.disabled = true;
+
+  // Build prompt: context + conversation history + user question
+  var historyText = aiChatHistory.slice(-6).map(function(m) {
+    return (m.role === 'user' ? 'User: ' : 'Assistant: ') + m.text;
   }).join('\n');
 
-  var alertText = alerts.length ? '\nALERT: ' + (alerts[0].event || '') + ' — ' + (alerts[0].headline || '') : '';
-
-  var summary = 'Location: ' + loc.name + ', ' + loc.country + '\n' +
-    'Current: ' + Math.round(cur.temp_c) + '°C, ' + cur.condition.text + ', feels like ' + Math.round(cur.feelslike_c) + '°C\n' +
-    'Humidity: ' + cur.humidity + '%, Wind: ' + cur.wind_kph + ' km/h ' + cur.wind_dir + ', UV: ' + cur.uv + '\n' +
-    'This week:\n' + weekSummary + alertText;
+  var prompt = aiWeatherContext + '\n\n' +
+    'You are a friendly weather assistant. Answer questions about the weather above in a conversational way. Keep answers under 60 words. Be practical — tell people if it\'s a good day for activities, if they need an umbrella, if it\'s safe to be outside, etc.\n\n' +
+    historyText + (isAuto ? '' : '\nUser: ' + userText) + '\nAssistant:';
 
   try {
     var r = await fetch(BACKEND + '/api/explain', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({summary: summary, language: currentLang})
+      body: JSON.stringify({summary: prompt, language: currentLang, chat_mode: true})
     });
     var data = await r.json();
-    res.textContent = data.explanation || 'No explanation available.';
-    res.classList.add('show');
+    var reply = data.explanation || 'Sorry, I couldn\'t get a response. Please try again.';
+    removeTyping();
+    aiChatHistory.push({role:'assistant', text: reply});
+    renderChatLog();
   } catch(e) {
-    res.textContent = 'Could not reach AI assistant. Please try again.';
-    res.classList.add('show');
+    removeTyping();
+    var errMsg = 'Could not reach the AI assistant. Please check your connection.';
+    aiChatHistory.push({role:'assistant', text: errMsg});
+    renderChatLog();
   }
 
-  btn.textContent = t('ai_btn');
-  btn.disabled = false;
+  if (sendBtn) sendBtn.disabled = false;
+}
+
+async function sendAiMessage() {
+  var input = document.getElementById('ai-chat-input');
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text || !currentWeatherData) return;
+  input.value = '';
+  if (!aiWeatherContext) aiWeatherContext = buildWeatherContext();
+  await sendAiRequest(text, false);
+}
+
+// Reset chat history when new location loads
+function resetAiChat() {
+  aiChatHistory = [];
+  aiWeatherContext = '';
+  aiChatOpen = false;
+  var panel = document.getElementById('ai-chat-panel');
+  if (panel) { panel.classList.remove('open'); panel.innerHTML = ''; }
 }
 
 // ════════════════════════════════════════════════════════════════
