@@ -270,6 +270,122 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .modal-btn-save { background: var(--purple); color: #fff; }
 .modal-btn-cancel { background: var(--bg3); color: var(--text2); }
 .modal-btn:active { opacity: 0.8; }
+
+/* ══════════════════════════════════════════════════
+   MOBILE RESPONSIVE FIXES  (max-width: 480px)
+   Desktop layout is unchanged — only small screens
+   are adjusted below.
+   Minimum body text: 18 px (elderly-friendly floor).
+   ══════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+
+  /* Prevent horizontal overflow / scrollbar */
+  html, body { overflow-x: hidden; }
+
+  /* ── HEADER ── */
+  .header { padding: 10px 14px 10px; }
+  /* Allow logo + controls to wrap to a second line if needed */
+  .header-top { gap: 6px; flex-wrap: wrap; }
+
+  /* Title: was 56 px — shrink so it fits on one line */
+  .logo { font-size: 26px; }
+
+  /* Language flag buttons */
+  .lang-flags { gap: 4px; }
+  .lang-flag-btn { font-size: 20px; padding: 3px 6px; }
+
+  /* Unit toggle (°F / °C) */
+  .unit-btn { font-size: 18px; padding: 6px 8px; }
+
+  /* Search bar */
+  .search-input { font-size: 20px; padding: 10px 12px; }
+  .search-item  { font-size: 20px; }
+  .loc-btn { font-size: 22px; padding: 10px 12px; }
+
+  /* ── ALERT BANNER ── */
+  .alert-banner  { font-size: 18px; }
+  .alert-title   { font-size: 20px; }
+  .alert-dismiss { font-size: 18px; }
+
+  /* ── LOADING / EMPTY STATE ── */
+  .state-icon  { font-size: 80px; }
+  .state-title { font-size: 26px; }
+  .state-sub   { font-size: 18px; }
+
+  /* ── CURRENT WEATHER ── */
+  .weather-main  { padding: 16px 14px 0; }
+  .location-name { font-size: 26px; }
+  .location-sub  { font-size: 18px; }
+  .save-place-btn { font-size: 18px; }
+
+  /* Card body: tighter padding so grid columns have room */
+  .current-card { padding: 16px 14px; }
+  .temp-row { gap: 10px; }
+
+  /* Big temperature number */
+  .temp-big { font-size: 86px; letter-spacing: -2px; }
+  .condition-text { font-size: 20px; }
+  .feels-like { font-size: 18px; }
+  .condition-icon { width: 64px; height: 64px; }
+
+  /* Detail cards — the primary overflow fix.
+     Was: detail-label 30 px, detail-value 44 px.
+     Now: detail-label 18 px, detail-value 20 px.
+     Inner column width on a 375 px screen is ~130 px —
+     the largest value ("10 mph NNW") fits comfortably. */
+  .detail-item  { padding: 10px 12px; }
+  .detail-label { font-size: 18px; }
+  .detail-value { font-size: 20px; overflow-wrap: break-word; word-break: break-word; }
+
+  /* ── AI SECTION ── */
+  /* Button text must fit on 1-2 lines max (was 3 lines at 44 px) */
+  .ai-section    { margin: 0 14px 16px; }
+  .ai-toggle-btn { font-size: 20px; padding: 14px 12px; }
+  .ai-bubble     { font-size: 18px; }
+  .ai-avatar     { font-size: 24px; }
+  .ai-chat-input { font-size: 18px; }
+  .ai-send-btn   { font-size: 22px; padding: 10px 14px; }
+  .ai-counter    { font-size: 18px; }
+
+  /* ── 7-DAY FORECAST ── */
+  .forecast-section { padding: 0 14px 16px; }
+  .section-label { font-size: 18px; }
+  .forecast-card { flex: 0 0 110px; min-width: 110px; padding: 12px 8px; }
+  .fc-day  { font-size: 18px; }
+  .fc-icon { font-size: 40px; }
+  .fc-high { font-size: 22px; }
+  .fc-low  { font-size: 18px; }
+  .fc-rain { font-size: 16px; }
+
+  /* ── SUNRISE / SUNSET ── */
+  .sun-row   { margin: 0 14px 16px; }
+  .sun-icon  { font-size: 40px; }
+  .sun-label { font-size: 18px; }
+  .sun-time  { font-size: 26px; }
+
+  /* ── POLLEN ── */
+  .pollen-section { padding: 0 14px 16px; }
+  .pollen-emoji { font-size: 36px; }
+  .pollen-label { font-size: 18px; }
+  .pollen-val   { font-size: 22px; }
+
+  /* ── SAVED PLACES PANEL ── */
+  .places-header { font-size: 20px; }
+  .places-empty  { font-size: 18px; }
+  .place-label   { font-size: 22px; }
+  .place-sub     { font-size: 18px; }
+  .place-del     { font-size: 18px; padding: 6px 10px; }
+
+  /* ── MODALS ── */
+  .modal-box   { padding: 24px 18px; }
+  .modal-title { font-size: 24px; }
+  .modal-sub   { font-size: 18px; }
+  .modal-input { font-size: 20px; }
+  .modal-btn   { font-size: 20px; padding: 12px; }
+
+  /* ── FOOTER ── */
+  .footer { font-size: 18px; }
+}
 </style>
 </head>
 <body>
