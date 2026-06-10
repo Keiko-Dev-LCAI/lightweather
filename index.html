@@ -157,6 +157,52 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .unit-toggle { display: flex; gap: 0; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .unit-btn { flex: 1; background: none; border: none; color: var(--text2); font-size: 34px; padding: 8px 12px; cursor: pointer; }
 .unit-btn.active { background: var(--purple); color: #fff; font-weight: 700; }
+
+/* ── SAVED PLACES ── */
+.save-place-btn {
+  background: none; border: 1px solid var(--gold); border-radius: 10px;
+  color: var(--gold); font-size: 36px; padding: 6px 14px; cursor: pointer;
+  margin-left: 12px; vertical-align: middle; font-weight: 600;
+}
+.save-place-btn:active { opacity: 0.7; }
+.places-panel {
+  display: none; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 14px; margin-top: 10px; max-height: 400px; overflow-y: auto;
+}
+.places-panel.open { display: block; }
+.places-header { font-size: 36px; font-weight: 700; color: var(--text2); padding: 14px 18px 8px; border-bottom: 1px solid var(--border); }
+.places-empty { font-size: 34px; color: var(--text2); padding: 20px 18px; text-align: center; }
+.place-item { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.place-item:last-child { border-bottom: none; }
+.place-item:hover { background: var(--purple-glow); }
+.place-item-info { flex: 1; min-width: 0; }
+.place-label { font-size: 40px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.place-sub { font-size: 30px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.place-del { background: none; border: none; color: var(--text2); font-size: 44px; padding: 4px 8px; cursor: pointer; line-height: 1; }
+.place-del:hover { color: var(--red); }
+
+/* ── SAVE MODAL ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  z-index: 500; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--bg2); border: 1px solid var(--purple);
+  border-radius: 20px; padding: 32px 28px; width: 90%; max-width: 560px;
+}
+.modal-title { font-size: 48px; font-weight: 700; margin-bottom: 8px; }
+.modal-sub { font-size: 34px; color: var(--text2); margin-bottom: 20px; }
+.modal-input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--purple);
+  border-radius: 12px; color: var(--text); font-size: 40px; padding: 14px 16px;
+  outline: none; margin-bottom: 20px;
+}
+.modal-btns { display: flex; gap: 12px; }
+.modal-btn { flex: 1; border: none; border-radius: 12px; font-size: 40px; padding: 14px; cursor: pointer; font-weight: 700; }
+.modal-btn-save { background: var(--purple); color: #fff; }
+.modal-btn-cancel { background: var(--bg3); color: var(--text2); }
+.modal-btn:active { opacity: 0.8; }
 </style>
 </head>
 <body>
@@ -185,6 +231,22 @@ body { min-height: 100vh; padding-bottom: 40px; }
       <div class="search-dropdown" id="search-dropdown"></div>
     </div>
     <button class="loc-btn" onclick="getLocation()" title="Use my location">📍</button>
+    <button class="loc-btn" onclick="togglePlacesPanel()" title="Saved Places" style="background:var(--bg3);border:1px solid var(--border);font-size:40px;">📌</button>
+  </div>
+  <div class="places-panel" id="places-panel"></div>
+</div>
+
+<!-- SAVE PLACE MODAL -->
+<div class="modal-overlay" id="save-modal">
+  <div class="modal-box">
+    <div class="modal-title">📌 Save This Place</div>
+    <div class="modal-sub" id="save-modal-city">Give this place a name</div>
+    <input class="modal-input" id="save-modal-input" type="text" placeholder="e.g. Mom's House, Sister's Home…" maxlength="40"
+           onkeydown="if(event.key==='Enter')confirmSavePlace()">
+    <div class="modal-btns">
+      <button class="modal-btn modal-btn-save" onclick="confirmSavePlace()">Save</button>
+      <button class="modal-btn modal-btn-cancel" onclick="closeSaveModal()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -221,8 +283,100 @@ const BACKEND = 'https://web-production-197c7.up.railway.app';
 let currentLang = 'en';
 let currentUnit = 'F';
 let currentWeatherData = null;
+let currentQuery = null;
 let searchTimer = null;
 let alertDismissed = false;
+let savedPlaces = [];
+
+function loadSavedPlaces() {
+  try { savedPlaces = JSON.parse(localStorage.getItem('lw_saved_places') || '[]'); } catch(e) { savedPlaces = []; }
+}
+function writeSavedPlaces() {
+  try { localStorage.setItem('lw_saved_places', JSON.stringify(savedPlaces)); } catch(e) {}
+}
+
+function togglePlacesPanel() {
+  var panel = document.getElementById('places-panel');
+  if (panel.classList.contains('open')) {
+    panel.classList.remove('open');
+  } else {
+    renderPlacesPanel();
+    panel.classList.add('open');
+  }
+}
+
+function renderPlacesPanel() {
+  loadSavedPlaces();
+  var panel = document.getElementById('places-panel');
+  if (!savedPlaces.length) {
+    panel.innerHTML = '<div class="places-header">📌 Saved Places</div><div class="places-empty">No saved places yet.<br>Load a city and tap ⭐ to save it.</div>';
+    return;
+  }
+  var items = savedPlaces.map(function(p, i) {
+    return '<div class="place-item" onclick="loadSavedPlace(' + i + ')">' +
+      '<div class="place-item-info">' +
+        '<div class="place-label">' + escHtml(p.label) + '</div>' +
+        '<div class="place-sub">' + escHtml(p.cityDisplay || p.q) + '</div>' +
+      '</div>' +
+      '<button class="place-del" onclick="deleteSavedPlace(event,' + i + ')">✕</button>' +
+    '</div>';
+  }).join('');
+  panel.innerHTML = '<div class="places-header">📌 Saved Places</div>' + items;
+}
+
+function loadSavedPlace(index) {
+  loadSavedPlaces();
+  var p = savedPlaces[index];
+  if (!p) return;
+  document.getElementById('places-panel').classList.remove('open');
+  loadWeather(p.q);
+}
+
+function deleteSavedPlace(event, index) {
+  event.stopPropagation();
+  loadSavedPlaces();
+  savedPlaces.splice(index, 1);
+  writeSavedPlaces();
+  renderPlacesPanel();
+}
+
+function saveCurrentPlace() {
+  if (!currentWeatherData || !currentQuery) return;
+  var loc = currentWeatherData.location;
+  var cityDisplay = loc.name + (loc.region ? ', ' + loc.region : '') + ', ' + loc.country;
+  document.getElementById('save-modal-city').textContent = cityDisplay;
+  document.getElementById('save-modal-input').value = loc.name;
+  document.getElementById('save-modal').classList.add('open');
+  setTimeout(function() { document.getElementById('save-modal-input').focus(); }, 100);
+}
+
+function confirmSavePlace() {
+  var label = document.getElementById('save-modal-input').value.trim();
+  if (!label) { document.getElementById('save-modal-input').focus(); return; }
+  loadSavedPlaces();
+  var loc = currentWeatherData.location;
+  var cityDisplay = loc.name + (loc.region ? ', ' + loc.region : '') + ', ' + loc.country;
+  // Remove duplicate if same query already saved
+  savedPlaces = savedPlaces.filter(function(p) { return p.q !== currentQuery; });
+  savedPlaces.push({ label: label, q: currentQuery, cityDisplay: cityDisplay });
+  writeSavedPlaces();
+  closeSaveModal();
+  // Brief confirmation on the ⭐ button
+  var btn = document.getElementById('save-place-btn');
+  if (btn) { btn.textContent = '✅ Saved!'; setTimeout(function() { if (btn) btn.textContent = '⭐ Save Place'; }, 1800); }
+}
+
+function closeSaveModal() {
+  document.getElementById('save-modal').classList.remove('open');
+}
+
+// Close places panel when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.header') && !e.target.closest('#save-modal')) {
+    var panel = document.getElementById('places-panel');
+    if (panel) panel.classList.remove('open');
+  }
+});
 
 // ════════════════════════════════════════════════════════════════
 // i18n
@@ -458,6 +612,10 @@ function doSearch() {
 
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.search-wrap')) hideDropdown();
+  if (!e.target.closest('.header') && !e.target.closest('#save-modal')) {
+    var panel = document.getElementById('places-panel');
+    if (panel) panel.classList.remove('open');
+  }
 });
 
 // ════════════════════════════════════════════════════════════════
@@ -477,6 +635,7 @@ function getLocation() {
 // WEATHER DATA
 // ════════════════════════════════════════════════════════════════
 async function loadWeather(q) {
+  currentQuery = q;
   showLoading();
   alertDismissed = false;
   document.getElementById('alert-banner').classList.remove('show');
@@ -542,7 +701,10 @@ function renderWeather(data) {
 
   // Build main HTML
   var html = '<div class="weather-main">' +
-    '<div class="location-name">' + escHtml(loc.name) + '</div>' +
+    '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">' +
+      '<div class="location-name" style="margin-bottom:0">' + escHtml(loc.name) + '</div>' +
+      '<button id="save-place-btn" class="save-place-btn" onclick="saveCurrentPlace()">⭐ Save Place</button>' +
+    '</div>' +
     '<div class="location-sub">' + escHtml(loc.region ? loc.region + ', ' + loc.country : loc.country) + ' &nbsp;·&nbsp; ' + escHtml(loc.localtime) + '</div>' +
 
     '<div class="current-card">' +
