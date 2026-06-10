@@ -36,18 +36,18 @@ body { min-height: 100vh; padding-bottom: 40px; }
   position: sticky; top: 0; z-index: 100;
 }
 .header-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.logo { font-size: 28px; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.logo { font-size: 56px; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 8px; }
 .logo span { color: var(--purple); }
 .lang-select {
   margin-left: auto;
   background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
-  color: var(--text); font-size: 18px; padding: 8px 12px; cursor: pointer; outline: none;
+  color: var(--text); font-size: 36px; padding: 8px 12px; cursor: pointer; outline: none;
 }
 .search-row { display: flex; gap: 10px; }
 .search-wrap { flex: 1; position: relative; }
 .search-input {
   width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
-  color: var(--text); font-size: 20px; padding: 12px 16px; outline: none;
+  color: var(--text); font-size: 40px; padding: 12px 16px; outline: none;
   transition: border-color 0.15s;
 }
 .search-input:focus { border-color: var(--purple); }
@@ -57,12 +57,12 @@ body { min-height: 100vh; padding-bottom: 40px; }
   border: 1px solid var(--border); border-radius: 12px; margin-top: 4px;
   z-index: 200; max-height: 240px; overflow-y: auto; display: none;
 }
-.search-item { padding: 14px 16px; font-size: 18px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.search-item { padding: 14px 16px; font-size: 36px; cursor: pointer; border-bottom: 1px solid var(--border); }
 .search-item:last-child { border-bottom: none; }
 .search-item:hover { background: var(--purple-glow); }
 .loc-btn {
   background: var(--purple); border: none; border-radius: 12px;
-  color: #fff; font-size: 22px; padding: 12px 18px; cursor: pointer;
+  color: #fff; font-size: 44px; padding: 12px 18px; cursor: pointer;
   white-space: nowrap; font-weight: 700;
 }
 .loc-btn:active { opacity: 0.8; }
@@ -71,41 +71,41 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .alert-banner {
   margin: 16px 20px 0;
   background: rgba(232,75,75,0.15); border: 1px solid rgba(232,75,75,0.5);
-  border-radius: 14px; padding: 14px 18px; font-size: 18px; line-height: 1.55;
+  border-radius: 14px; padding: 14px 18px; font-size: 36px; line-height: 1.55;
   display: none;
 }
 .alert-banner.show { display: block; }
-.alert-title { font-size: 20px; font-weight: 700; color: #ff6b6b; margin-bottom: 6px; }
+.alert-title { font-size: 40px; font-weight: 700; color: #ff6b6b; margin-bottom: 6px; }
 .alert-body { color: var(--text); }
-.alert-dismiss { margin-top: 10px; background: none; border: 1px solid rgba(232,75,75,0.4); border-radius: 8px; color: var(--text2); font-size: 16px; padding: 6px 14px; cursor: pointer; }
+.alert-dismiss { margin-top: 10px; background: none; border: 1px solid rgba(232,75,75,0.4); border-radius: 8px; color: var(--text2); font-size: 32px; padding: 6px 14px; cursor: pointer; }
 
 /* ── LOADING / EMPTY STATES ── */
 .state-box { text-align: center; padding: 80px 30px; }
-.state-icon { font-size: 72px; margin-bottom: 20px; }
-.state-title { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
-.state-sub { font-size: 20px; color: var(--text2); line-height: 1.6; }
+.state-icon { font-size: 144px; margin-bottom: 20px; }
+.state-title { font-size: 56px; font-weight: 700; margin-bottom: 12px; }
+.state-sub { font-size: 40px; color: var(--text2); line-height: 1.6; }
 .spinner { width: 48px; height: 48px; border: 4px solid var(--border); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── CURRENT WEATHER CARD ── */
 .weather-main { padding: 24px 20px 0; }
-.location-name { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
-.location-sub { font-size: 18px; color: var(--text2); margin-bottom: 20px; }
+.location-name { font-size: 56px; font-weight: 700; margin-bottom: 4px; }
+.location-sub { font-size: 36px; color: var(--text2); margin-bottom: 20px; }
 .current-card {
   background: linear-gradient(135deg, var(--bg2), var(--bg3));
   border: 1px solid var(--border); border-radius: 20px;
   padding: 28px 24px; margin-bottom: 16px;
 }
 .temp-row { display: flex; align-items: flex-start; gap: 20px; margin-bottom: 16px; }
-.temp-big { font-size: 88px; font-weight: 300; line-height: 1; letter-spacing: -4px; }
+.temp-big { font-size: 176px; font-weight: 300; line-height: 1; letter-spacing: -4px; }
 .temp-info { display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 8px; }
-.condition-text { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
-.feels-like { font-size: 18px; color: var(--text2); }
-.condition-icon { width: 80px; height: 80px; margin-left: auto; }
+.condition-text { font-size: 44px; font-weight: 600; margin-bottom: 6px; }
+.feels-like { font-size: 36px; color: var(--text2); }
+.condition-icon { width: 160px; height: 160px; margin-left: auto; }
 .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .detail-item { background: rgba(255,255,255,0.04); border-radius: 12px; padding: 14px 16px; }
-.detail-label { font-size: 15px; color: var(--text2); margin-bottom: 4px; }
-.detail-value { font-size: 22px; font-weight: 600; }
+.detail-label { font-size: 30px; color: var(--text2); margin-bottom: 4px; }
+.detail-value { font-size: 44px; font-weight: 600; }
 
 /* ── UV INDEX BAR ── */
 .uv-bar { width: 100%; height: 8px; border-radius: 4px; background: linear-gradient(to right, #4caf7d, #e8c050, #e8904b, #e84b6a); margin-top: 6px; position: relative; }
@@ -115,47 +115,47 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .ai-section { margin: 0 20px 20px; }
 .ai-btn {
   width: 100%; background: var(--purple-glow); border: 1px solid var(--purple);
-  border-radius: 14px; color: var(--text); font-size: 22px; padding: 16px;
+  border-radius: 14px; color: var(--text); font-size: 44px; padding: 16px;
   cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px;
 }
 .ai-btn:active { opacity: 0.8; }
 .ai-result {
   background: var(--bg2); border: 1px solid var(--purple);
   border-radius: 14px; padding: 20px 22px; margin-top: 12px;
-  font-size: 22px; line-height: 1.65; color: var(--text); display: none;
+  font-size: 44px; line-height: 1.65; color: var(--text); display: none;
 }
 .ai-result.show { display: block; }
 
 /* ── FORECAST ── */
 .forecast-section { padding: 0 20px 20px; }
-.section-label { font-size: 20px; font-weight: 700; color: var(--text2); margin-bottom: 14px; letter-spacing: 0.5px; text-transform: uppercase; font-size: 16px; }
+.section-label { font-size: 40px; font-weight: 700; color: var(--text2); margin-bottom: 14px; letter-spacing: 0.5px; text-transform: uppercase; font-size: 32px; }
 .forecast-scroll { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; }
 .forecast-scroll::-webkit-scrollbar { display: none; }
 .forecast-card {
-  flex: 0 0 100px; background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 16px; padding: 16px 12px; text-align: center; min-width: 100px;
+  flex: 0 0 180px; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px 12px; text-align: center; min-width: 180px;
 }
 .forecast-card.today { border-color: var(--purple); background: var(--purple-glow); }
-.fc-day { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
-.fc-icon { font-size: 36px; margin-bottom: 8px; }
-.fc-high { font-size: 22px; font-weight: 700; }
-.fc-low { font-size: 17px; color: var(--text2); margin-top: 2px; }
-.fc-rain { font-size: 15px; color: var(--blue); margin-top: 6px; }
+.fc-day { font-size: 34px; font-weight: 700; margin-bottom: 8px; }
+.fc-icon { font-size: 72px; margin-bottom: 8px; }
+.fc-high { font-size: 44px; font-weight: 700; }
+.fc-low { font-size: 34px; color: var(--text2); margin-top: 2px; }
+.fc-rain { font-size: 30px; color: var(--blue); margin-top: 6px; }
 
 /* ── SUNRISE/SUNSET ── */
 .sun-row { display: flex; gap: 12px; margin: 0 20px 20px; }
 .sun-card { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 16px; text-align: center; }
-.sun-icon { font-size: 36px; margin-bottom: 6px; }
-.sun-label { font-size: 15px; color: var(--text2); margin-bottom: 4px; }
-.sun-time { font-size: 24px; font-weight: 700; }
+.sun-icon { font-size: 72px; margin-bottom: 6px; }
+.sun-label { font-size: 30px; color: var(--text2); margin-bottom: 4px; }
+.sun-time { font-size: 48px; font-weight: 700; }
 
 /* ── FOOTER ── */
-.footer { text-align: center; padding: 30px 20px 10px; color: var(--text2); font-size: 17px; border-top: 1px solid var(--border); margin-top: 20px; }
+.footer { text-align: center; padding: 30px 20px 10px; color: var(--text2); font-size: 34px; border-top: 1px solid var(--border); margin-top: 20px; }
 .footer a { color: var(--purple); text-decoration: none; }
 
 /* ── UNIT TOGGLE ── */
 .unit-toggle { display: flex; gap: 0; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.unit-btn { flex: 1; background: none; border: none; color: var(--text2); font-size: 17px; padding: 8px 12px; cursor: pointer; }
+.unit-btn { flex: 1; background: none; border: none; color: var(--text2); font-size: 34px; padding: 8px 12px; cursor: pointer; }
 .unit-btn.active { background: var(--purple); color: #fff; font-weight: 700; }
 </style>
 </head>
@@ -530,7 +530,7 @@ function renderWeather(data) {
     var rainChance = day.day.daily_chance_of_rain;
     return '<div class="forecast-card' + (i === 0 ? ' today' : '') + '">' +
       '<div class="fc-day">' + dayLabel + '</div>' +
-      (fcIcon ? '<img src="' + fcIcon + '" style="width:48px;height:48px;margin:0 auto 4px;display:block">' : '<div class="fc-icon">🌤</div>') +
+      (fcIcon ? '<img src="' + fcIcon + '" style="width:96px;height:96px;margin:0 auto 4px;display:block">' : '<div class="fc-icon">🌤</div>') +
       '<div class="fc-high">' + tempNum(day.day.maxtemp_c) + '°</div>' +
       '<div class="fc-low">' + tempNum(day.day.mintemp_c) + '°</div>' +
       (rainChance > 10 ? '<div class="fc-rain">💧 ' + rainChance + '%</div>' : '') +
