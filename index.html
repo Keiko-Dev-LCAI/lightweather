@@ -149,6 +149,14 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .sun-label { font-size: 30px; color: var(--text2); margin-bottom: 4px; }
 .sun-time { font-size: 48px; font-weight: 700; }
 
+/* ── POLLEN ── */
+.pollen-section { padding: 0 20px 20px; }
+.pollen-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.pollen-item { flex: 1; min-width: 120px; background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 16px 14px; text-align: center; }
+.pollen-emoji { font-size: 56px; margin-bottom: 6px; }
+.pollen-label { font-size: 30px; color: var(--text2); margin-bottom: 6px; }
+.pollen-val { font-size: 40px; font-weight: 700; }
+
 /* ── FOOTER ── */
 .footer { text-align: center; padding: 30px 20px 10px; color: var(--text2); font-size: 34px; border-top: 1px solid var(--border); margin-top: 20px; }
 .footer a { color: var(--purple); text-decoration: none; }
@@ -227,7 +235,7 @@ body { min-height: 100vh; padding-bottom: 40px; }
   <div class="search-row">
     <div class="search-wrap">
       <input class="search-input" id="search-input" type="text" autocomplete="off" autocorrect="off" spellcheck="false"
-             placeholder="Search any city…" oninput="onSearchInput()" onkeydown="if(event.key==='Enter')doSearch()">
+             placeholder="Search city, zip code, or coordinates…" oninput="onSearchInput()" onkeydown="if(event.key==='Enter')doSearch()">
       <div class="search-dropdown" id="search-dropdown"></div>
     </div>
     <button class="loc-btn" onclick="getLocation()" title="Use my location">📍</button>
@@ -268,6 +276,7 @@ body { min-height: 100vh; padding-bottom: 40px; }
 
 <div class="footer">
   Powered by <a href="https://lightchain.ai" target="_blank">Lightchain AI</a> &nbsp;·&nbsp;
+  <a id="almanac-link" href="#" target="_blank" rel="noopener">📅 Today in History</a> &nbsp;·&nbsp;
   <a href="mailto:orcamail.ai" data-i18n="advertise">📢 Advertise with us</a>
 </div>
 
@@ -386,7 +395,7 @@ const STRINGS = {
     welcome_title: 'Welcome to LightWeather',
     welcome_sub: 'Tap 📍 for your local weather, or search any city in the world.',
     loading: 'Getting weather…',
-    search_placeholder: 'Search any city…',
+    search_placeholder: 'City, zip code, or coordinates…',
     feels_like: 'Feels like',
     humidity: 'Humidity',
     wind: 'Wind',
@@ -663,8 +672,13 @@ function renderWeather(data) {
   // Alerts
   if (alerts.length && !alertDismissed) {
     var a = alerts[0];
-    document.getElementById('alert-title').textContent = '🚨 ' + (a.event || 'Severe Weather Alert');
-    document.getElementById('alert-body').textContent  = a.headline || a.desc || '';
+    var cityLabel = loc.name + (loc.region ? ', ' + loc.region : '');
+    document.getElementById('alert-title').textContent = '🚨 ' + (a.event || 'Severe Weather Alert') + ' — ' + cityLabel;
+    // Use desc first line if headline looks like a location (no time/date keywords)
+    var headline = a.headline || '';
+    var useDesc = headline && !headline.match(/issued|AM|PM|CDT|CST|EST|PST|MDT|MST|UTC|warning|advisory|watch|expires/i) && a.desc;
+    var body = useDesc ? a.desc.split('\n')[0] : (headline || a.desc || '');
+    document.getElementById('alert-body').textContent = body;
     document.getElementById('alert-banner').classList.add('show');
   }
 
@@ -743,6 +757,9 @@ function renderWeather(data) {
     '<div class="sun-card"><div class="sun-icon">🌇</div><div class="sun-label">' + t('sunset') + '</div><div class="sun-time">' + todaySun.sunset + '</div></div>' +
   '</div>' : '') +
 
+  // Pollen
+  buildPollenSection(fc[0] ? fc[0].day : {}) +
+
   // 7-day forecast
   '<div class="forecast-section">' +
     '<div class="section-label">' + t('seven_day') + '</div>' +
@@ -758,6 +775,33 @@ function uvLabel(uv) {
   if (uv <= 7) return '(High)';
   if (uv <= 10) return '(Very High)';
   return '(Extreme)';
+}
+
+function pollenColor(val) {
+  var v = String(val || '').toLowerCase();
+  if (v.includes('very high') || v.includes('extreme')) return 'var(--red)';
+  if (v.includes('high')) return 'var(--orange)';
+  if (v.includes('moderate') || v.includes('medium')) return 'var(--gold)';
+  if (v.includes('low') || v.includes('none')) return 'var(--green)';
+  return 'var(--text)';
+}
+
+function buildPollenSection(today) {
+  var tree = today.pollen_tree, grass = today.pollen_grass, weed = today.pollen_weed;
+  if (!tree && !grass && !weed) return '';
+  var items = '';
+  if (tree)  items += '<div class="pollen-item"><div class="pollen-emoji">🌳</div><div class="pollen-label">Tree</div><div class="pollen-val" style="color:' + pollenColor(tree) + '">' + escHtml(String(tree)) + '</div></div>';
+  if (grass) items += '<div class="pollen-item"><div class="pollen-emoji">🌿</div><div class="pollen-label">Grass</div><div class="pollen-val" style="color:' + pollenColor(grass) + '">' + escHtml(String(grass)) + '</div></div>';
+  if (weed)  items += '<div class="pollen-item"><div class="pollen-emoji">🌾</div><div class="pollen-label">Weed</div><div class="pollen-val" style="color:' + pollenColor(weed) + '">' + escHtml(String(weed)) + '</div></div>';
+  return '<div class="pollen-section"><div class="section-label">🌸 Pollen Forecast — Today</div><div class="pollen-row">' + items + '</div></div>';
+}
+
+function almanacUrl() {
+  var d = new Date();
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  var yyyy = d.getFullYear();
+  return 'https://www.almanac.com/calendar/date/' + yyyy + '-' + mm + '-' + dd;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -839,6 +883,9 @@ function escHtml(s) {
   var lang = nav.split('-')[0].toLowerCase();
   if (['en','zh','es','fr','ja','ko'].includes(lang)) setLanguage(lang);
   else setLanguage('en');
+  // Wire Farmers Almanac link to today's date
+  var al = document.getElementById('almanac-link');
+  if (al) al.href = almanacUrl();
   // Auto-load local weather on page open
   getLocation();
 })();
