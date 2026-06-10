@@ -255,29 +255,32 @@ def search_cities():
 
 @app.route('/api/explain', methods=['POST'])
 def explain_weather():
-    data     = request.json or {}
-    summary  = data.get('summary', '')
-    language = data.get('language', 'en')
+    data      = request.json or {}
+    summary   = data.get('summary', '')
+    language  = data.get('language', 'en')
+    chat_mode = data.get('chat_mode', False)
     if not summary:
         return jsonify({'error': 'summary required'}), 400
 
-    lang_names = {
-        'en': 'English', 'zh': 'Mandarin Chinese', 'es': 'Spanish',
-        'fr': 'French', 'ja': 'Japanese', 'ko': 'Korean'
-    }
-    lang_name = lang_names.get(language, 'English')
-
-    prompt = (
-        f"You are a friendly, helpful weather assistant. Based on this weather data, write a "
-        f"natural 2-3 sentence summary of what to expect — be practical and specific about "
-        f"what to wear or bring. Mention any alerts if present. Be warm and conversational.\n\n"
-        f"{summary}\n\n"
-        f"Respond in {lang_name} only. Keep it under 80 words."
-    )
+    if chat_mode:
+        # In chat mode the frontend sends the full ready-to-go prompt
+        prompt = summary
+    else:
+        lang_names = {
+            'en': 'English', 'zh': 'Mandarin Chinese', 'es': 'Spanish',
+            'fr': 'French', 'ja': 'Japanese', 'ko': 'Korean'
+        }
+        lang_name = lang_names.get(language, 'English')
+        prompt = (
+            f"You are a friendly, helpful weather assistant. Based on this weather data, write a "
+            f"natural 2-3 sentence summary of what to expect — be practical and specific about "
+            f"what to wear or bring. Mention any alerts if present. Be warm and conversational.\n\n"
+            f"{summary}\n\n"
+            f"Respond in {lang_name} only. Keep it under 80 words."
+        )
 
     client = get_aivm()
     if not client:
-        # Fallback: rule-based summary if no AIVM key
         return jsonify({'explanation': _fallback_explanation(summary, language)})
 
     try:
