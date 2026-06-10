@@ -1,0 +1,19 @@
+{
+  "name": "LightWeather",
+  "short_name": "LightWeather",
+  "description": "AI-powered weather app on Lightchain — 7-day forecast, severe alerts, 6 languages",
+  "start_url": "/lightweather/",
+  "display": "standalone",
+  "background_color": "#0d0d1a",
+  "theme_color": "#9b7fe8",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["weather", "utilities"]
+}
