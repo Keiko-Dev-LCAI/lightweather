@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#0d0d1a"/>
+  <!-- Purple glow ring -->
+  <circle cx="256" cy="256" r="230" fill="none" stroke="#9b7fe8" stroke-width="8" opacity="0.4"/>
+  <!-- Sun rays (background) -->
+  <circle cx="256" cy="140" r="70" fill="#e8c050" opacity="0.15"/>
+  <circle cx="256" cy="140" r="50" fill="#e8c050" opacity="0.2"/>
+  <!-- Cloud body -->
+  <ellipse cx="256" cy="230" rx="130" ry="65" fill="#1a1a36"/>
+  <circle cx="196" cy="215" r="56" fill="#1a1a36"/>
+  <circle cx="306" cy="210" r="50" fill="#1a1a36"/>
+  <circle cx="256" cy="200" r="62" fill="#1a1a36"/>
+  <!-- Cloud highlight border -->
+  <ellipse cx="256" cy="230" rx="130" ry="65" fill="none" stroke="#9b7fe8" stroke-width="3" opacity="0.5"/>
+  <circle cx="196" cy="215" r="56" fill="none" stroke="#9b7fe8" stroke-width="3" opacity="0.5"/>
+  <circle cx="306" cy="210" r="50" fill="none" stroke="#9b7fe8" stroke-width="3" opacity="0.5"/>
+  <circle cx="256" cy="200" r="62" fill="none" stroke="#9b7fe8" stroke-width="3" opacity="0.5"/>
+  <!-- Lightning bolt -->
+  <polygon points="272,240 240,310 262,310 246,380 298,292 272,292 294,240" fill="#e8c050"/>
+  <!-- Lightning glow -->
+  <polygon points="272,240 240,310 262,310 246,380 298,292 272,292 294,240" fill="none" stroke="#fff" stroke-width="2" opacity="0.6"/>
+</svg>
