@@ -43,11 +43,17 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .header-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .logo { font-size: 56px; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 8px; }
 .logo span { color: var(--purple); }
-.lang-select {
-  margin-left: auto;
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
-  color: var(--text); font-size: 36px; padding: 8px 12px; cursor: pointer; outline: none;
+.lang-select { display: none; }  /* hidden — replaced by flag buttons */
+.lang-flags {
+  margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
 }
+.lang-flag-btn {
+  background: var(--bg3); border: 2px solid var(--border); border-radius: 10px;
+  font-size: 34px; padding: 6px 10px; cursor: pointer; line-height: 1;
+  transition: border-color 0.15s, background 0.15s;
+}
+.lang-flag-btn.active { border-color: var(--purple); background: var(--purple-glow); }
+.lang-flag-btn:active { opacity: 0.7; }
 .search-row { display: flex; gap: 10px; }
 .search-wrap { flex: 1; position: relative; }
 .search-input {
@@ -221,6 +227,27 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .place-del { background: rgba(232,75,106,0.15); border: 1px solid rgba(232,75,106,0.4); border-radius: 10px; color: var(--red); font-size: 34px; padding: 8px 14px; cursor: pointer; font-weight: 700; white-space: nowrap; }
 .place-del:hover { background: rgba(232,75,106,0.3); }
 
+/* ── PREMIUM BADGE ── */
+.premium-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, var(--gold), #c8a030);
+  color: #0d0d1a; font-size: 30px; font-weight: 800; border-radius: 8px;
+  padding: 4px 12px; margin-left: 10px; vertical-align: middle;
+}
+.ai-counter {
+  font-size: 30px; color: var(--text2); text-align: center; padding: 6px 0 0;
+}
+.ai-counter.low { color: var(--orange); }
+
+/* ── TERMS MODAL ── */
+.terms-scroll {
+  max-height: 60vh; overflow-y: auto; background: var(--bg3);
+  border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;
+  font-size: 32px; line-height: 1.7; color: var(--text2);
+}
+.terms-scroll h4 { font-size: 36px; color: var(--text); margin: 14px 0 6px; }
+.terms-scroll p  { margin-bottom: 10px; }
+
 /* ── SAVE MODAL ── */
 .modal-overlay {
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
@@ -263,6 +290,14 @@ body { min-height: 100vh; padding-bottom: 40px; }
       <option value="ja">🇯🇵 日本語</option>
       <option value="ko">🇰🇷 한국어</option>
     </select>
+    <div class="lang-flags" id="lang-flags">
+      <button class="lang-flag-btn active" id="lf-en" onclick="setLanguage('en')" title="English">🇺🇸</button>
+      <button class="lang-flag-btn" id="lf-zh" onclick="setLanguage('zh')" title="中文">🇨🇳</button>
+      <button class="lang-flag-btn" id="lf-es" onclick="setLanguage('es')" title="Español">🇪🇸</button>
+      <button class="lang-flag-btn" id="lf-fr" onclick="setLanguage('fr')" title="Français">🇫🇷</button>
+      <button class="lang-flag-btn" id="lf-ja" onclick="setLanguage('ja')" title="日本語">🇯🇵</button>
+      <button class="lang-flag-btn" id="lf-ko" onclick="setLanguage('ko')" title="한국어">🇰🇷</button>
+    </div>
   </div>
   <div class="search-row">
     <div class="search-wrap">
@@ -290,6 +325,70 @@ body { min-height: 100vh; padding-bottom: 40px; }
   </div>
 </div>
 
+<!-- PREMIUM UPGRADE MODAL -->
+<div class="modal-overlay" id="premium-modal">
+  <div class="modal-box" style="max-width:600px">
+    <div class="modal-title">⭐ Unlock Unlimited AI Chat</div>
+    <div class="modal-sub">You've used your 10 free AI messages today.</div>
+    <div id="premium-price-display" style="background:var(--bg3);border-radius:12px;padding:16px 18px;margin-bottom:18px;font-size:36px;line-height:1.8">
+      Loading price…
+    </div>
+    <div id="premium-payment-section" style="display:none">
+      <div style="font-size:34px;color:var(--text2);margin-bottom:8px">Send exactly the amount shown to:</div>
+      <div style="background:var(--bg3);border-radius:10px;padding:12px 16px;font-size:32px;font-family:monospace;word-break:break-all;margin-bottom:16px;border:1px solid var(--border)" id="premium-owner-addr"></div>
+      <div style="font-size:34px;color:var(--text2);margin-bottom:8px">After sending, paste the transaction hash:</div>
+      <input class="modal-input" id="premium-tx-input" type="text" placeholder="0x…transaction hash from your wallet" style="margin-bottom:6px">
+      <div id="premium-error" style="font-size:32px;color:var(--red);min-height:28px;margin-bottom:10px"></div>
+    </div>
+    <div id="premium-wallet-section">
+      <button class="modal-btn modal-btn-save" id="premium-connect-btn" onclick="connectWalletForPremium()" style="margin-bottom:12px">Connect Wallet to Subscribe</button>
+    </div>
+    <div id="premium-verify-section" style="display:none">
+      <button class="modal-btn modal-btn-save" id="premium-verify-btn" onclick="verifySubscriptionTx()">Verify Payment &amp; Activate</button>
+    </div>
+    <button class="modal-btn modal-btn-cancel" onclick="closePremiumModal()" style="margin-top:10px">Maybe Later</button>
+    <div style="font-size:28px;color:var(--text2);margin-top:14px;line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
+      By subscribing you agree to our <a href="#" onclick="showTermsModal();return false;" style="color:var(--purple)">Terms &amp; Conditions</a>.
+      Payments are in LCAI cryptocurrency and are <strong style="color:var(--text)">non-refundable</strong>.
+      Subscription is for 30 days and does not auto-renew.
+    </div>
+  </div>
+</div>
+
+<!-- TERMS & CONDITIONS MODAL -->
+<div class="modal-overlay" id="terms-modal">
+  <div class="modal-box" style="max-width:620px">
+    <div class="modal-title" style="font-size:44px;margin-bottom:14px">📋 Terms &amp; Conditions</div>
+    <div class="terms-scroll">
+      <h4>Payment &amp; Subscriptions</h4>
+      <p>LightWeather Premium is priced at <strong>$0.50 USD per month</strong>, paid in LCAI cryptocurrency. The LCAI amount is calculated at the time of payment based on the current market price and may differ from month to month.</p>
+      <p>All payments are made in LCAI on the Lightchain mainnet and are <strong>final and non-refundable</strong>. Cryptocurrency transactions are irreversible by nature. We cannot reverse, recall, or refund any payment once it has been sent to the subscription address.</p>
+      <p>Subscriptions are valid for <strong>30 days</strong> from the time your payment is verified. Subscriptions do <strong>not</strong> auto-renew. You must manually renew before your subscription expires to maintain uninterrupted access.</p>
+
+      <h4>Price Variance</h4>
+      <p>The LCAI amount required for subscription changes with the market price of LCAI. The amount shown at the time you subscribe is the correct amount for that subscription period. We are not responsible for price changes between the time you view the price and the time you send the transaction — always verify the amount shown in your wallet before confirming.</p>
+
+      <h4>Service Availability</h4>
+      <p>LightWeather AI chat is powered by the Lightchain AIVM network. AI responses may occasionally be unavailable or delayed due to network conditions. Subscription fees are not refunded for periods of service interruption.</p>
+      <p>We reserve the right to modify, suspend, or discontinue any feature at any time. We will make reasonable efforts to notify users of significant changes.</p>
+
+      <h4>Weather Data Accuracy</h4>
+      <p>Weather data is sourced from WeatherAPI.com. LightWeather makes no warranties regarding the accuracy, completeness, or timeliness of weather information. Do not rely solely on LightWeather for safety-critical decisions. Always consult official government weather services (such as the National Weather Service) for life-safety decisions.</p>
+
+      <h4>AI Responses</h4>
+      <p>AI-generated weather explanations and answers are for <strong>informational purposes only</strong>. They are not a substitute for official weather forecasts, professional advice, or emergency alerts. LightWeather AI is not responsible for decisions made based on AI-generated content.</p>
+
+      <h4>Privacy</h4>
+      <p>Your wallet address is stored on our server only to verify and track your subscription status. We do not collect, sell, or share personal information. No personally identifiable information is required to use LightWeather.</p>
+
+      <h4>Governing Terms</h4>
+      <p>LightWeather is a decentralized application running on the Lightchain AI network. By using this app and making any payment, you acknowledge that you understand and accept these terms in full.</p>
+      <p style="color:var(--text);font-weight:700">Last updated: June 2026</p>
+    </div>
+    <button class="modal-btn modal-btn-save" onclick="closeTermsModal()">I Understand</button>
+  </div>
+</div>
+
 <!-- ALERT BANNER -->
 <div class="alert-banner" id="alert-banner">
   <div class="alert-title" id="alert-title">🚨 Severe Weather Alert</div>
@@ -309,6 +408,7 @@ body { min-height: 100vh; padding-bottom: 40px; }
 <div class="footer">
   Powered by <a href="https://lightchain.ai" target="_blank">Lightchain AI</a> &nbsp;·&nbsp;
   <a id="almanac-link" href="#" target="_blank" rel="noopener">📅 Today in History</a> &nbsp;·&nbsp;
+  <a href="#" onclick="showTermsModal();return false;">📋 Terms &amp; Conditions</a> &nbsp;·&nbsp;
   <a href="mailto:orcamail.ai" data-i18n="advertise">📢 Advertise with us</a>
 </div>
 
@@ -328,6 +428,187 @@ let currentQuery = null;
 let searchTimer = null;
 let alertDismissed = false;
 let savedPlaces = [];
+
+// ── PREMIUM STATE ──────────────────────────────────────────────
+const FREE_AI_DAILY_LIMIT = 10;
+let premiumWallet    = null;   // connected wallet address
+let isPremiumActive  = false;  // subscription is live
+let premiumExpiresAt = null;
+
+function getAiDailyUsage() {
+  var today = new Date().toISOString().split('T')[0];
+  try {
+    var s = JSON.parse(localStorage.getItem('lw_ai_daily') || '{}');
+    if (s.date !== today) return { count: 0, date: today };
+    return s;
+  } catch(e) { return { count: 0, date: today }; }
+}
+function setAiDailyUsage(count) {
+  var today = new Date().toISOString().split('T')[0];
+  try { localStorage.setItem('lw_ai_daily', JSON.stringify({ count: count, date: today })); } catch(e) {}
+}
+function aiMessagesLeft() {
+  if (isPremiumActive) return 999;
+  var usage = getAiDailyUsage();
+  return Math.max(0, FREE_AI_DAILY_LIMIT - usage.count);
+}
+function consumeAiMessage() {
+  if (isPremiumActive) return true;
+  var usage = getAiDailyUsage();
+  if (usage.count >= FREE_AI_DAILY_LIMIT) return false;
+  setAiDailyUsage(usage.count + 1);
+  updateAiCounter();
+  return true;
+}
+function updateAiCounter() {
+  var el = document.getElementById('ai-counter');
+  if (!el) return;
+  if (isPremiumActive) {
+    el.innerHTML = '⭐ <span class="premium-badge">PREMIUM</span> — Unlimited AI chat';
+    el.className = 'ai-counter';
+    return;
+  }
+  var left = aiMessagesLeft();
+  el.textContent = left + ' free AI messages remaining today';
+  el.className = 'ai-counter' + (left <= 3 ? ' low' : '');
+}
+
+// ── WALLET + SUBSCRIPTION ──────────────────────────────────────
+async function connectWalletForPremium() {
+  if (!window.ethereum) {
+    document.getElementById('premium-error').textContent = 'Trust Wallet not detected. Please open this app in Trust Wallet browser.';
+    return;
+  }
+  var btn = document.getElementById('premium-connect-btn');
+  btn.textContent = 'Connecting…'; btn.disabled = true;
+  try {
+    var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    premiumWallet = accounts[0];
+    // Check if already subscribed
+    var r = await fetch(BACKEND + '/api/lw/subscription/' + premiumWallet);
+    var sub = await r.json();
+    if (sub.subscribed) {
+      isPremiumActive = true;
+      premiumExpiresAt = sub.expires_at;
+      savePremiumState();
+      updateAiCounter();
+      closePremiumModal();
+      return;
+    }
+    // Show payment section
+    document.getElementById('premium-wallet-section').style.display = 'none';
+    document.getElementById('premium-payment-section').style.display = 'block';
+    document.getElementById('premium-verify-section').style.display = 'block';
+  } catch(e) {
+    document.getElementById('premium-error').textContent = 'Could not connect wallet. Please try again.';
+    btn.textContent = 'Connect Wallet to Subscribe'; btn.disabled = false;
+  }
+}
+
+async function verifySubscriptionTx() {
+  var txHash = (document.getElementById('premium-tx-input').value || '').trim();
+  var errEl  = document.getElementById('premium-error');
+  if (!txHash || !txHash.startsWith('0x')) {
+    errEl.textContent = 'Please paste a valid transaction hash (starts with 0x).';
+    return;
+  }
+  var btn = document.getElementById('premium-verify-btn');
+  btn.textContent = 'Verifying…'; btn.disabled = true;
+  errEl.textContent = '';
+  try {
+    var r = await fetch(BACKEND + '/api/lw/verify-subscription', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ wallet: premiumWallet, tx_hash: txHash })
+    });
+    var data = await r.json();
+    if (data.success) {
+      isPremiumActive = true;
+      premiumExpiresAt = data.expires_at;
+      savePremiumState();
+      updateAiCounter();
+      closePremiumModal();
+    } else {
+      errEl.textContent = data.error || 'Verification failed. Please try again.';
+      btn.textContent = 'Verify Payment & Activate'; btn.disabled = false;
+    }
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+    btn.textContent = 'Verify Payment & Activate'; btn.disabled = false;
+  }
+}
+
+function savePremiumState() {
+  try {
+    localStorage.setItem('lw_premium', JSON.stringify({
+      wallet: premiumWallet, expires_at: premiumExpiresAt, ts: Date.now()
+    }));
+  } catch(e) {}
+}
+
+function loadPremiumState() {
+  try {
+    var s = JSON.parse(localStorage.getItem('lw_premium') || '{}');
+    if (!s.wallet || !s.expires_at) return;
+    // Check expiry
+    if (s.expires_at && s.expires_at < Math.floor(Date.now()/1000)) {
+      localStorage.removeItem('lw_premium'); return;
+    }
+    premiumWallet = s.wallet;
+    // Re-verify with server in background
+    fetch(BACKEND + '/api/lw/subscription/' + premiumWallet)
+      .then(function(r) { return r.json(); })
+      .then(function(sub) {
+        isPremiumActive = sub.subscribed || false;
+        premiumExpiresAt = sub.expires_at;
+        if (!isPremiumActive) { localStorage.removeItem('lw_premium'); }
+        updateAiCounter();
+      }).catch(function() {
+        // Network fail — trust cached state
+        isPremiumActive = true;
+        updateAiCounter();
+      });
+  } catch(e) {}
+}
+
+async function showPremiumModal() {
+  document.getElementById('premium-modal').classList.add('open');
+  document.getElementById('premium-error').textContent = '';
+  document.getElementById('premium-tx-input').value = '';
+  document.getElementById('premium-wallet-section').style.display = 'block';
+  document.getElementById('premium-payment-section').style.display = 'none';
+  document.getElementById('premium-verify-section').style.display = 'none';
+  var connectBtn = document.getElementById('premium-connect-btn');
+  connectBtn.textContent = 'Connect Wallet to Subscribe'; connectBtn.disabled = false;
+  // Load LCAI price
+  var priceEl = document.getElementById('premium-price-display');
+  priceEl.textContent = 'Loading current LCAI price…';
+  try {
+    var r = await fetch(BACKEND + '/api/lw/price');
+    var p = await r.json();
+    var ownerEl = document.getElementById('premium-owner-addr');
+    if (ownerEl) ownerEl.textContent = p.owner_wallet;
+    priceEl.innerHTML =
+      '<strong style="font-size:44px;color:var(--gold)">' + p.required_lcai + ' LCAI</strong>' +
+      ' = <strong style="color:var(--text)">$0.50 USD / month</strong><br>' +
+      '<span style="color:var(--text2);font-size:32px">Based on current LCAI price of $' + p.lcai_price_usd.toFixed(6) + '</span><br>' +
+      '<span style="color:var(--text2);font-size:30px">Price updates in real-time — amount may vary slightly</span>';
+  } catch(e) {
+    priceEl.textContent = 'Could not load current price. Please try again.';
+  }
+}
+
+function closePremiumModal() {
+  document.getElementById('premium-modal').classList.remove('open');
+}
+
+function showTermsModal() {
+  document.getElementById('terms-modal').classList.add('open');
+}
+
+function closeTermsModal() {
+  document.getElementById('terms-modal').classList.remove('open');
+}
 
 function loadSavedPlaces() {
   try { savedPlaces = JSON.parse(localStorage.getItem('lw_saved_places') || '[]'); } catch(e) { savedPlaces = []; }
@@ -583,6 +864,11 @@ function setLanguage(lang) {
   document.querySelectorAll('[data-i18n]').forEach(function(el) {
     el.textContent = t(el.dataset.i18n);
   });
+  // Update flag button active state
+  ['en','zh','es','fr','ja','ko'].forEach(function(l) {
+    var btn = document.getElementById('lf-' + l);
+    if (btn) btn.classList.toggle('active', l === lang);
+  });
   if (currentWeatherData) renderWeather(currentWeatherData);
 }
 
@@ -784,6 +1070,7 @@ function renderWeather(data) {
   // AI Chat
   '<div class="ai-section">' +
     '<button class="ai-toggle-btn" id="ai-toggle-btn" onclick="toggleAiChat()">' + t('ai_btn') + '</button>' +
+    '<div id="ai-counter" class="ai-counter"></div>' +
     '<div class="ai-chat-panel" id="ai-chat-panel">' +
       '<div class="ai-chat-log" id="ai-chat-log"></div>' +
       '<div class="ai-chat-input-row">' +
@@ -809,6 +1096,7 @@ function renderWeather(data) {
   '</div>';
 
   document.getElementById('main-content').innerHTML = html;
+  updateAiCounter();
 }
 
 function uvLabel(uv) {
@@ -882,8 +1170,16 @@ function toggleAiChat() {
   aiChatOpen = !aiChatOpen;
   panel.classList.toggle('open', aiChatOpen);
   if (aiChatOpen) {
+    // Check limit before auto-greeting
+    if (aiMessagesLeft() <= 0) {
+      aiChatOpen = false;
+      panel.classList.remove('open');
+      showPremiumModal();
+      return;
+    }
     // Send an automatic greeting/explanation on first open
     if (aiChatHistory.length === 0) {
+      if (!consumeAiMessage()) { aiChatOpen = false; panel.classList.remove('open'); showPremiumModal(); return; }
       aiWeatherContext = buildWeatherContext();
       btn.textContent = t('ai_loading');
       btn.disabled = true;
@@ -973,6 +1269,9 @@ async function sendAiMessage() {
   if (!input) return;
   var text = input.value.trim();
   if (!text || !currentWeatherData) return;
+  // Check limit
+  if (aiMessagesLeft() <= 0) { showPremiumModal(); return; }
+  if (!consumeAiMessage()) { showPremiumModal(); return; }
   input.value = '';
   if (!aiWeatherContext) aiWeatherContext = buildWeatherContext();
   await sendAiRequest(text, false);
@@ -1019,6 +1318,8 @@ function escHtml(s) {
   // Wire Farmers Almanac link to today's date
   var al = document.getElementById('almanac-link');
   if (al) al.href = almanacUrl();
+  // Load premium state from localStorage
+  loadPremiumState();
   // Auto-load local weather on page open
   getLocation();
 })();

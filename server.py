@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""LightWeather — Backend server. Weather data + AIVM forecast explanation."""
+"""LightWeather — Backend server. Weather data + AIVM forecast explanation + premium subscriptions."""
 
-import os, time, json, threading, base64 as _b64_mod, secrets as _secrets_mod
+import os, time, json, threading, base64 as _b64_mod, secrets as _secrets_mod, sqlite3
+import urllib.request as _urllib_req
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests as _requests
@@ -12,6 +13,153 @@ CORS(app, origins="*")
 WEATHERAPI_KEY = os.environ.get("WEATHERAPI_KEY", "")
 WEATHERAPI_BASE = "https://api.weatherapi.com/v1"
 LCAI_RPC = "https://rpc.mainnet.lightchain.ai"
+
+# ── PREMIUM CONFIG ──────────────────────────────────────────────────────────
+OWNER_WALLET       = '0x6518fd07b3da01b17bd37d7c40f9a5e3c87a09ba'   # receives subscription fees
+MONTHLY_PRICE_USD  = 0.50                                             # $0.50/month
+PREMIUM_WHITELIST  = {'0x729fea1d8ca343f26c4cc743a4e1898d65ce6a76'}  # dApp wallet always free
+
+# ── DATABASE ────────────────────────────────────────────────────────────────
+_data_dir = os.environ.get('DATA_DIR', '/app/data')
+os.makedirs(_data_dir, exist_ok=True)
+DB_PATH = os.path.join(_data_dir, 'lightweather.db')
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db()
+    conn.execute('''CREATE TABLE IF NOT EXISTS subscriptions (
+        wallet TEXT PRIMARY KEY,
+        expires_at INTEGER NOT NULL,
+        tx_hash TEXT
+    )''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ── LCAI PRICE FEED (cached 5 min) ──────────────────────────────────────────
+_lcai_price_cache = {'price': 0.004, 'ts': 0}
+
+def get_lcai_price():
+    global _lcai_price_cache
+    now = time.time()
+    if now - _lcai_price_cache['ts'] < 300:
+        return _lcai_price_cache['price']
+    # Try CoinGecko
+    try:
+        req = _urllib_req.Request(
+            'https://api.coingecko.com/api/v3/simple/price?ids=lightchain-ai&vs_currencies=usd',
+            headers={'User-Agent': 'LightWeather/1.0', 'Accept': 'application/json'}
+        )
+        with _urllib_req.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+            price = (data.get('lightchain-ai') or {}).get('usd')
+            if price and float(price) > 0:
+                _lcai_price_cache = {'price': float(price), 'ts': now}
+                return float(price)
+    except Exception:
+        pass
+    # Try DexScreener
+    try:
+        req = _urllib_req.Request(
+            'https://api.dexscreener.com/latest/dex/search?q=LCAI',
+            headers={'User-Agent': 'LightWeather/1.0', 'Accept': 'application/json'}
+        )
+        with _urllib_req.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+            for pair in (data.get('pairs') or []):
+                price = float(pair.get('priceUsd') or 0)
+                if price > 0:
+                    _lcai_price_cache = {'price': price, 'ts': now}
+                    return price
+    except Exception:
+        pass
+    _lcai_price_cache['ts'] = now
+    return _lcai_price_cache['price']
+
+def lightchain_rpc(method, params):
+    payload = json.dumps({'jsonrpc': '2.0', 'method': method, 'params': params, 'id': 1}).encode()
+    req = _urllib_req.Request(
+        'https://node1.lightchain.ai', data=payload,
+        headers={'Content-Type': 'application/json', 'User-Agent': 'LightWeather/1.0'}
+    )
+    with _urllib_req.urlopen(req, timeout=15) as r:
+        return json.loads(r.read())
+
+# ── PREMIUM ENDPOINTS ────────────────────────────────────────────────────────
+
+@app.route('/api/lw/price')
+def api_lw_price():
+    price = get_lcai_price()
+    required_lcai = MONTHLY_PRICE_USD / price
+    return jsonify({
+        'usd': MONTHLY_PRICE_USD,
+        'lcai_price_usd': price,
+        'required_lcai': round(required_lcai, 2),
+        'owner_wallet': OWNER_WALLET
+    })
+
+@app.route('/api/lw/subscription/<wallet>')
+def api_lw_subscription(wallet):
+    w = wallet.lower().strip()
+    if w in PREMIUM_WHITELIST:
+        return jsonify({'subscribed': True, 'expires_at': None, 'whitelisted': True})
+    now = int(time.time())
+    conn = get_db()
+    row = conn.execute('SELECT expires_at FROM subscriptions WHERE wallet = ?', (w,)).fetchone()
+    conn.close()
+    subscribed = bool(row and row['expires_at'] and row['expires_at'] > now)
+    return jsonify({'subscribed': subscribed, 'expires_at': row['expires_at'] if row else None})
+
+@app.route('/api/lw/verify-subscription', methods=['POST'])
+def api_lw_verify_subscription():
+    data     = request.json or {}
+    w        = (data.get('wallet') or '').lower().strip()
+    tx_hash  = (data.get('tx_hash') or '').strip()
+    if not w or not tx_hash:
+        return jsonify({'error': 'wallet and tx_hash required'}), 400
+    if w in PREMIUM_WHITELIST:
+        return jsonify({'success': True, 'subscribed': True, 'whitelisted': True})
+    try:
+        result = lightchain_rpc('eth_getTransactionByHash', [tx_hash])
+        tx = result.get('result')
+        if not tx:
+            return jsonify({'error': 'Transaction not found on Lightchain. Check the hash and try again.'}), 404
+        to_addr = (tx.get('to') or '').lower()
+        if to_addr != OWNER_WALLET:
+            return jsonify({'error': 'This transaction was not sent to the LightWeather subscription address.'}), 400
+        # Check amount
+        price         = get_lcai_price()
+        required_lcai = MONTHLY_PRICE_USD / price
+        required_wei  = int(required_lcai * 1e18 * 0.95)   # 5% tolerance
+        tx_value      = int(tx.get('value', '0x0'), 16)
+        if tx_value < required_wei:
+            sent   = round(tx_value / 1e18, 4)
+            needed = round(required_lcai, 2)
+            return jsonify({'error': f'Insufficient amount — sent {sent} LCAI, needed ~{needed} LCAI'}), 400
+        # Check receipt
+        try:
+            rcpt = lightchain_rpc('eth_getTransactionReceipt', [tx_hash]).get('result')
+            if rcpt and rcpt.get('status') == '0x0':
+                return jsonify({'error': 'Transaction was reverted. Please send a new one.'}), 400
+        except Exception:
+            pass
+        # Store 30-day subscription
+        expires_at = int(time.time()) + 30 * 24 * 60 * 60
+        conn = get_db()
+        conn.execute(
+            'INSERT OR REPLACE INTO subscriptions (wallet, expires_at, tx_hash) VALUES (?, ?, ?)',
+            (w, expires_at, tx_hash)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'expires_at': expires_at})
+    except Exception as e:
+        return jsonify({'error': 'Could not verify transaction: ' + str(e)}), 500
 
 # ── AIVM CONFIG ──────────────────────────────────────────────────────────────
 AIVM_PRIVATE_KEY = os.environ.get("LIGHTCHAIN_PRIVATE_KEY", "").strip()
