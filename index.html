@@ -387,6 +387,12 @@ body { min-height: 100vh; padding-bottom: 40px; }
   .footer { font-size: 18px; }
 }
 </style>
+<script type="module">
+  try {
+    const { EthereumProvider } = await import('https://esm.sh/@walletconnect/ethereum-provider@2.17.3');
+    window.WCEthereumProvider = EthereumProvider;
+  } catch(e) { console.warn('WalletConnect unavailable:', e); }
+</script>
 </head>
 <body>
 
@@ -587,10 +593,36 @@ function updateAiCounter() {
 }
 
 // ── WALLET + SUBSCRIPTION ──────────────────────────────────────
+var _wcProv = null;
+
+async function connectViaWalletConnect() {
+  if (!window.WCEthereumProvider) { return false; }
+  try {
+    _wcProv = await window.WCEthereumProvider.init({
+      projectId: '3c6a0da53258912a28923198ddac3333',
+      chains: [9200], optionalChains: [1], showQrModal: true,
+      metadata: { name: 'LightWeather', description: 'AI Weather App on Lightchain', url: 'https://lightweather.win', icons: ['https://lightweather.win/coin-sun.png'] },
+      rpcMap: { 9200: 'https://rpc.mainnet.lightchain.ai' }
+    });
+    await _wcProv.enable();
+    window.ethereum = _wcProv;
+    return true;
+  } catch(e) {
+    if (!e || e.message?.includes('User rejected') || e.message?.includes('rejected') || e.code === 4001) return false;
+    document.getElementById('premium-error').textContent = 'WalletConnect failed. Try a different wallet.';
+    return false;
+  }
+}
+
 async function connectWalletForPremium() {
   if (!window.ethereum) {
-    document.getElementById('premium-error').textContent = 'Trust Wallet not detected. Please open this app in Trust Wallet browser.';
-    return;
+    if (window.WCEthereumProvider) {
+      var ok = await connectViaWalletConnect();
+      if (!ok) return;
+    } else {
+      document.getElementById('premium-error').textContent = 'No wallet detected. Install a browser wallet extension or use WalletConnect.';
+      return;
+    }
   }
   var btn = document.getElementById('premium-connect-btn');
   btn.textContent = 'Connecting…'; btn.disabled = true;
