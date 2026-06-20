@@ -368,6 +368,144 @@ def get_aivm():
             _aivm_client = AIVMClient(AIVM_PRIVATE_KEY)
         return _aivm_client
 
+# ── OPEN-METEO FALLBACK ───────────────────────────────────────────────────────
+
+WMO_TEXT = {
+    0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+    45: 'Fog', 48: 'Depositing rime fog', 51: 'Light drizzle', 53: 'Drizzle',
+    55: 'Heavy drizzle', 56: 'Freezing drizzle', 57: 'Heavy freezing drizzle',
+    61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
+    66: 'Light freezing rain', 67: 'Heavy freezing rain',
+    71: 'Slight snow', 73: 'Moderate snow', 75: 'Heavy snow', 77: 'Snow grains',
+    80: 'Rain showers', 81: 'Moderate rain showers', 82: 'Violent rain showers',
+    85: 'Snow showers', 86: 'Heavy snow showers',
+    95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with heavy hail',
+}
+
+def _wmo_text(code):
+    return WMO_TEXT.get(int(code or 0), 'Unknown')
+
+def _parse_coords(q):
+    if ',' not in q:
+        return None
+    parts = [p.strip() for p in q.split(',', 1)]
+    try:
+        lat = float(parts[0])
+        lon = float(parts[1].split(',')[0].strip())
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            return lat, lon
+    except (TypeError, ValueError):
+        pass
+    return None
+
+def _geocode_open_meteo(q):
+    coords = _parse_coords(q)
+    if coords:
+        return {'latitude': coords[0], 'longitude': coords[1],
+                'name': f"{coords[0]:.2f}, {coords[1]:.2f}", 'admin1': '', 'country': ''}
+    r = _requests.get('https://geocoding-api.open-meteo.com/v1/search',
+                      params={'name': q, 'count': 1, 'language': 'en', 'format': 'json'}, timeout=8)
+    r.raise_for_status()
+    results = (r.json() or {}).get('results') or []
+    if not results:
+        return None
+    hit = results[0]
+    return {
+        'latitude': hit['latitude'], 'longitude': hit['longitude'],
+        'name': hit.get('name') or q,
+        'admin1': hit.get('admin1') or '',
+        'country': hit.get('country') or '',
+    }
+
+def _open_meteo_forecast(lat, lon):
+    r = _requests.get('https://api.open-meteo.com/v1/forecast', params={
+        'latitude': lat, 'longitude': lon, 'timezone': 'auto', 'forecast_days': 7,
+        'current': ','.join([
+            'temperature_2m', 'apparent_temperature', 'relative_humidity_2m',
+            'weather_code', 'wind_speed_10m', 'wind_direction_10m',
+            'surface_pressure', 'uv_index'
+        ]),
+        'daily': ','.join([
+            'weather_code', 'temperature_2m_max', 'temperature_2m_min',
+            'precipitation_probability_max', 'sunrise', 'sunset', 'uv_index_max'
+        ]),
+    }, timeout=12)
+    r.raise_for_status()
+    return r.json()
+
+def _wind_dir_label(deg):
+    dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+            'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+    try:
+        idx = int((float(deg) + 11.25) / 22.5) % 16
+        return dirs[idx]
+    except (TypeError, ValueError):
+        return ''
+
+def _open_meteo_to_weatherapi(geo, om):
+    cur = om.get('current') or {}
+    daily = om.get('daily') or {}
+    tz = om.get('timezone') or 'UTC'
+    code = int(cur.get('weather_code') or 0)
+    text = _wmo_text(code)
+    forecastday = []
+    dates = daily.get('time') or []
+    for i, date in enumerate(dates):
+        day_code = int((daily.get('weather_code') or [0])[i] or 0)
+        sunrise = ((daily.get('sunrise') or [''])[i] or '').split('T')[-1]
+        sunset  = ((daily.get('sunset') or [''])[i] or '').split('T')[-1]
+        forecastday.append({
+            'date': date,
+            'day': {
+                'maxtemp_c': (daily.get('temperature_2m_max') or [0])[i],
+                'mintemp_c': (daily.get('temperature_2m_min') or [0])[i],
+                'daily_chance_of_rain': (daily.get('precipitation_probability_max') or [0])[i] or 0,
+                'condition': {'text': _wmo_text(day_code), 'icon': ''},
+            },
+            'astro': {'sunrise': sunrise, 'sunset': sunset},
+        })
+    localtime = time.strftime('%Y-%m-%d %I:%M %p', time.localtime())
+    return {
+        'location': {
+            'name': geo.get('name') or 'Unknown',
+            'region': geo.get('admin1') or '',
+            'country': geo.get('country') or '',
+            'localtime': localtime,
+            'tz_id': tz,
+        },
+        'current': {
+            'temp_c': cur.get('temperature_2m'),
+            'feelslike_c': cur.get('apparent_temperature'),
+            'humidity': cur.get('relative_humidity_2m'),
+            'wind_kph': cur.get('wind_speed_10m'),
+            'wind_dir': _wind_dir_label(cur.get('wind_direction_10m')),
+            'vis_km': 10,
+            'pressure_mb': cur.get('surface_pressure'),
+            'uv': cur.get('uv_index') or 0,
+            'condition': {'text': text, 'icon': ''},
+        },
+        'forecast': {'forecastday': forecastday},
+        'alerts': {'alert': []},
+        '_source': 'open-meteo',
+    }
+
+def _weather_from_open_meteo(q):
+    geo = _geocode_open_meteo(q)
+    if not geo:
+        return None
+    om = _open_meteo_forecast(geo['latitude'], geo['longitude'])
+    return _open_meteo_to_weatherapi(geo, om)
+
+def _search_open_meteo(q):
+    r = _requests.get('https://geocoding-api.open-meteo.com/v1/search',
+                      params={'name': q, 'count': 6, 'language': 'en', 'format': 'json'}, timeout=8)
+    r.raise_for_status()
+    return [{
+        'name': hit.get('name') or '',
+        'region': hit.get('admin1') or '',
+        'country': hit.get('country') or '',
+    } for hit in ((r.json() or {}).get('results') or [])]
+
 # ── WEATHER ENDPOINTS ─────────────────────────────────────────────────────────
 
 @app.route('/api/weather')
@@ -375,30 +513,42 @@ def get_weather():
     q = request.args.get('q', '').strip()
     if not q:
         return jsonify({'error': 'q required'}), 400
-    if not WEATHERAPI_KEY:
-        return jsonify({'error': 'Weather API not configured'}), 500
+    if WEATHERAPI_KEY:
+        try:
+            r = _requests.get(f"{WEATHERAPI_BASE}/forecast.json",
+                              params={'key': WEATHERAPI_KEY, 'q': q, 'days': 7, 'alerts': 'yes', 'aqi': 'no'},
+                              timeout=10)
+            r.raise_for_status()
+            return jsonify(r.json())
+        except Exception as e:
+            print(f"[weather] WeatherAPI failed for {q!r}: {e}")
     try:
-        r = _requests.get(f"{WEATHERAPI_BASE}/forecast.json",
-                          params={'key': WEATHERAPI_KEY, 'q': q, 'days': 7, 'alerts': 'yes', 'aqi': 'no'},
-                          timeout=10)
-        r.raise_for_status()
-        return jsonify(r.json())
-    except _requests.exceptions.HTTPError as e:
-        return jsonify({'error': 'Location not found'}), 404
+        payload = _weather_from_open_meteo(q)
+        if payload:
+            return jsonify(payload)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[weather] Open-Meteo failed for {q!r}: {e}")
+    return jsonify({'error': 'Location not found'}), 404
 
 @app.route('/api/search')
 def search_cities():
     q = request.args.get('q', '').strip()
     if not q or len(q) < 2:
         return jsonify([])
+    if WEATHERAPI_KEY:
+        try:
+            r = _requests.get(f"{WEATHERAPI_BASE}/search.json",
+                              params={'key': WEATHERAPI_KEY, 'q': q}, timeout=5)
+            r.raise_for_status()
+            data = r.json()
+            if data:
+                return jsonify(data)
+        except Exception as e:
+            print(f"[search] WeatherAPI failed for {q!r}: {e}")
     try:
-        r = _requests.get(f"{WEATHERAPI_BASE}/search.json",
-                          params={'key': WEATHERAPI_KEY, 'q': q}, timeout=5)
-        r.raise_for_status()
-        return jsonify(r.json())
-    except Exception:
+        return jsonify(_search_open_meteo(q))
+    except Exception as e:
+        print(f"[search] Open-Meteo failed for {q!r}: {e}")
         return jsonify([])
 
 @app.route('/api/explain', methods=['POST'])

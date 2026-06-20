@@ -386,6 +386,63 @@ body { min-height: 100vh; padding-bottom: 40px; }
   /* ── FOOTER ── */
   .footer { font-size: 18px; }
 }
+
+/* ══════════════════════════════════════════════════
+   DESKTOP / TABLET  (min-width: 481px)
+   Base styles target large touch UIs; scale down for PC.
+   ══════════════════════════════════════════════════ */
+@media (min-width: 481px) {
+  .logo { font-size: 28px; }
+  .lang-flag-btn { font-size: 22px; padding: 4px 8px; }
+  .unit-btn { font-size: 18px; }
+  .search-input { font-size: 20px; padding: 10px 14px; }
+  .search-item { font-size: 18px; }
+  .loc-btn { font-size: 22px; padding: 10px 14px; }
+  .alert-banner { font-size: 18px; margin: 12px 20px 0; }
+  .alert-title { font-size: 20px; }
+  .alert-dismiss { font-size: 16px; }
+  .state-icon { font-size: 80px; }
+  .state-title { font-size: 28px; }
+  .state-sub { font-size: 18px; }
+  .location-name { font-size: 28px; }
+  .location-sub { font-size: 18px; }
+  .save-place-btn { font-size: 18px; }
+  .temp-big { font-size: 96px; }
+  .condition-text { font-size: 22px; }
+  .feels-like { font-size: 18px; }
+  .condition-icon { width: 80px; height: 80px; }
+  .detail-label { font-size: 16px; }
+  .detail-value { font-size: 20px; }
+  .ai-toggle-btn { font-size: 20px; padding: 14px; }
+  .ai-bubble { font-size: 18px; }
+  .ai-chat-input { font-size: 18px; }
+  .ai-send-btn { font-size: 22px; }
+  .ai-counter { font-size: 16px; }
+  .section-label { font-size: 18px; }
+  .fc-day { font-size: 18px; }
+  .fc-icon { font-size: 48px; }
+  .fc-high { font-size: 22px; }
+  .fc-low { font-size: 18px; }
+  .fc-rain { font-size: 16px; }
+  .sun-icon { font-size: 44px; }
+  .sun-label { font-size: 16px; }
+  .sun-time { font-size: 26px; }
+  .pollen-emoji { font-size: 40px; }
+  .pollen-label { font-size: 16px; }
+  .pollen-val { font-size: 20px; }
+  .footer { font-size: 16px; }
+  .modal-title { font-size: 26px; }
+  .modal-sub { font-size: 18px; }
+  .modal-input { font-size: 20px; }
+  .modal-btn { font-size: 20px; }
+  .lightchain-tagline {
+    font-size: 16px; color: var(--purple); margin-top: 8px; line-height: 1.5;
+  }
+}
+
+.lightchain-tagline {
+  font-size: 18px; color: var(--purple); margin-top: 10px; line-height: 1.5; font-weight: 600;
+}
 </style>
 <script type="module">
   try {
@@ -451,22 +508,24 @@ body { min-height: 100vh; padding-bottom: 40px; }
 <div class="modal-overlay" id="premium-modal">
   <div class="modal-box" style="max-width:600px">
     <div class="modal-title">⭐ Unlock Unlimited AI Chat</div>
-    <div class="modal-sub">You've used your 10 free AI messages today.</div>
+    <div class="modal-sub" id="premium-limit-msg">You've used all 5 free AI messages.</div>
     <div id="premium-price-display" style="background:var(--bg3);border-radius:12px;padding:16px 18px;margin-bottom:18px;font-size:36px;line-height:1.8">
       Loading price…
     </div>
     <div id="premium-payment-section" style="display:none">
-      <div style="font-size:34px;color:var(--text2);margin-bottom:8px">Send exactly the amount shown to:</div>
-      <div style="background:var(--bg3);border-radius:10px;padding:12px 16px;font-size:32px;font-family:monospace;word-break:break-all;margin-bottom:16px;border:1px solid var(--border)" id="premium-owner-addr"></div>
-      <div style="font-size:34px;color:var(--text2);margin-bottom:8px">After sending, paste the transaction hash:</div>
-      <input class="modal-input" id="premium-tx-input" type="text" placeholder="0x…transaction hash from your wallet" style="margin-bottom:6px">
-      <div id="premium-error" style="font-size:32px;color:var(--red);min-height:28px;margin-bottom:10px"></div>
+      <button class="modal-btn modal-btn-save" id="premium-send-btn" onclick="sendPremiumPayment()" style="margin-bottom:12px">Send LCAI &amp; Subscribe</button>
+      <div style="font-size:18px;color:var(--text2);margin-bottom:10px;line-height:1.5">Your wallet will open to confirm the exact LCAI amount shown above.</div>
+      <details id="premium-manual-wrap" style="margin-bottom:10px">
+        <summary style="font-size:18px;color:var(--purple);cursor:pointer;margin-bottom:8px">Having trouble? Paste transaction hash manually</summary>
+        <div style="font-size:18px;color:var(--text2);margin-bottom:8px">Send to:</div>
+        <div style="background:var(--bg3);border-radius:10px;padding:10px 14px;font-size:16px;font-family:monospace;word-break:break-all;margin-bottom:12px;border:1px solid var(--border)" id="premium-owner-addr"></div>
+        <input class="modal-input" id="premium-tx-input" type="text" placeholder="0x…transaction hash from your wallet" style="margin-bottom:6px">
+        <button class="modal-btn modal-btn-save" id="premium-verify-btn" onclick="verifySubscriptionTx()" style="margin-top:8px">Verify Payment &amp; Activate</button>
+      </details>
+      <div id="premium-error" style="font-size:18px;color:var(--red);min-height:28px;margin-bottom:10px"></div>
     </div>
     <div id="premium-wallet-section">
       <button class="modal-btn modal-btn-save" id="premium-connect-btn" onclick="connectWalletForPremium()" style="margin-bottom:12px">Connect Wallet to Subscribe</button>
-    </div>
-    <div id="premium-verify-section" style="display:none">
-      <button class="modal-btn modal-btn-save" id="premium-verify-btn" onclick="verifySubscriptionTx()">Verify Payment &amp; Activate</button>
     </div>
     <button class="modal-btn modal-btn-cancel" onclick="closePremiumModal()" style="margin-top:10px">Maybe Later</button>
     <div style="font-size:28px;color:var(--text2);margin-top:14px;line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
@@ -495,7 +554,7 @@ body { min-height: 100vh; padding-bottom: 40px; }
       <p>We reserve the right to modify, suspend, or discontinue any feature at any time. We will make reasonable efforts to notify users of significant changes.</p>
 
       <h4>Weather Data Accuracy</h4>
-      <p>Weather data is sourced from WeatherAPI.com. LightWeather makes no warranties regarding the accuracy, completeness, or timeliness of weather information. Do not rely solely on LightWeather for safety-critical decisions. Always consult official government weather services (such as the National Weather Service) for life-safety decisions.</p>
+      <p>Weather data is primarily sourced from WeatherAPI.com, with Open-Meteo as a backup when needed. LightWeather makes no warranties regarding the accuracy, completeness, or timeliness of weather information. Do not rely solely on LightWeather for safety-critical decisions. Always consult official government weather services (such as the National Weather Service) for life-safety decisions.</p>
 
       <h4>AI Responses</h4>
       <p>AI-generated weather explanations and answers are for <strong>informational purposes only</strong>. They are not a substitute for official weather forecasts, professional advice, or emergency alerts. LightWeather AI is not responsible for decisions made based on AI-generated content.</p>
@@ -524,11 +583,12 @@ body { min-height: 100vh; padding-bottom: 40px; }
     <div class="state-icon">⚡</div>
     <div class="state-title" data-i18n="welcome_title">Welcome to LightWeather</div>
     <div class="state-sub" data-i18n="welcome_sub">Tap 📍 for your local weather, or search any city in the world.</div>
+    <div class="lightchain-tagline" data-i18n="lightchain_tagline">AI answers powered by Lightchain nodes — not Google, not OpenAI.</div>
   </div>
 </div>
 
 <div class="footer">
-  Powered by <a href="https://lightchain.ai" target="_blank">Lightchain AI</a> &nbsp;·&nbsp;
+  AI powered by <a href="https://lightchain.ai" target="_blank">Lightchain AIVM</a> — decentralized node network &nbsp;·&nbsp;
   <a id="almanac-link" href="#" target="_blank" rel="noopener">📅 Today in History</a> &nbsp;·&nbsp;
   <a href="#" onclick="showTermsModal();return false;">📋 Terms &amp; Conditions</a> &nbsp;·&nbsp;
   <a href="mailto:orcamail.ai" data-i18n="advertise">📢 Advertise with us</a>
@@ -552,7 +612,7 @@ let alertDismissed = false;
 let savedPlaces = [];
 
 // ── PREMIUM STATE ──────────────────────────────────────────────
-const FREE_AI_LIFETIME_LIMIT = 3;
+const FREE_AI_LIFETIME_LIMIT = 5;
 const PREMIUM_WHITELIST = [
   '0x6518fd07b3da01b17bd37d7c40f9a5e3c87a09ba',  // owner / testing
   '0x729fea1d8ca343f26c4cc743a4e1898d65ce6a76'   // dApp wallet / testing
@@ -589,7 +649,7 @@ function updateAiCounter() {
   }
   var left = aiMessagesLeft();
   el.textContent = left + ' free AI messages remaining';
-  el.className = 'ai-counter' + (left <= 1 ? ' low' : '');
+  el.className = 'ai-counter' + (left <= 2 ? ' low' : '');
 }
 
 // ── WALLET + SUBSCRIPTION ──────────────────────────────────────
@@ -651,14 +711,48 @@ async function connectWalletForPremium() {
     // Show payment section
     document.getElementById('premium-wallet-section').style.display = 'none';
     document.getElementById('premium-payment-section').style.display = 'block';
-    document.getElementById('premium-verify-section').style.display = 'block';
+    var sendBtn = document.getElementById('premium-send-btn');
+    if (sendBtn) { sendBtn.textContent = 'Send LCAI & Subscribe'; sendBtn.disabled = false; }
   } catch(e) {
     document.getElementById('premium-error').textContent = 'Could not connect wallet. Please try again.';
     btn.textContent = 'Connect Wallet to Subscribe'; btn.disabled = false;
   }
 }
 
-async function verifySubscriptionTx() {
+async function sendPremiumPayment() {
+  if (!premiumWallet || !window._premiumPrice) {
+    document.getElementById('premium-error').textContent = 'Connect your wallet and wait for the price to load.';
+    return;
+  }
+  if (!window.ethereum) {
+    document.getElementById('premium-error').textContent = 'No wallet available to send the payment.';
+    return;
+  }
+  var btn = document.getElementById('premium-send-btn');
+  var errEl = document.getElementById('premium-error');
+  btn.textContent = 'Confirm in wallet…'; btn.disabled = true;
+  errEl.textContent = '';
+  try {
+    var wei = BigInt(Math.round(window._premiumPrice.required_lcai * 1e18));
+    var txHash = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [{
+        from: premiumWallet,
+        to: window._premiumPrice.owner_wallet,
+        value: '0x' + wei.toString(16),
+        chainId: '0x23F0'
+      }]
+    });
+    document.getElementById('premium-tx-input').value = txHash;
+    await verifySubscriptionTx(true);
+  } catch(e) {
+    if (e && e.code === 4001) errEl.textContent = 'Transaction cancelled.';
+    else errEl.textContent = 'Payment failed: ' + ((e && e.message) || 'unknown error');
+    btn.textContent = 'Send LCAI & Subscribe'; btn.disabled = false;
+  }
+}
+
+async function verifySubscriptionTx(fromAutoSend) {
   var txHash = (document.getElementById('premium-tx-input').value || '').trim();
   var errEl  = document.getElementById('premium-error');
   if (!txHash || !txHash.startsWith('0x')) {
@@ -666,7 +760,9 @@ async function verifySubscriptionTx() {
     return;
   }
   var btn = document.getElementById('premium-verify-btn');
-  btn.textContent = 'Verifying…'; btn.disabled = true;
+  var sendBtn = document.getElementById('premium-send-btn');
+  if (btn) { btn.textContent = 'Verifying…'; btn.disabled = true; }
+  if (fromAutoSend && sendBtn) { sendBtn.textContent = 'Verifying payment…'; sendBtn.disabled = true; }
   errEl.textContent = '';
   try {
     var r = await fetch(BACKEND + '/api/lw/verify-subscription', {
@@ -683,11 +779,13 @@ async function verifySubscriptionTx() {
       closePremiumModal();
     } else {
       errEl.textContent = data.error || 'Verification failed. Please try again.';
-      btn.textContent = 'Verify Payment & Activate'; btn.disabled = false;
+      if (btn) { btn.textContent = 'Verify Payment & Activate'; btn.disabled = false; }
+      if (sendBtn) { sendBtn.textContent = 'Send LCAI & Subscribe'; sendBtn.disabled = false; }
     }
   } catch(e) {
     errEl.textContent = 'Connection error. Please try again.';
-    btn.textContent = 'Verify Payment & Activate'; btn.disabled = false;
+    if (btn) { btn.textContent = 'Verify Payment & Activate'; btn.disabled = false; }
+    if (sendBtn) { sendBtn.textContent = 'Send LCAI & Subscribe'; sendBtn.disabled = false; }
   }
 }
 
@@ -737,15 +835,18 @@ async function showPremiumModal() {
   document.getElementById('premium-tx-input').value = '';
   document.getElementById('premium-wallet-section').style.display = 'block';
   document.getElementById('premium-payment-section').style.display = 'none';
-  document.getElementById('premium-verify-section').style.display = 'none';
   var connectBtn = document.getElementById('premium-connect-btn');
   connectBtn.textContent = 'Connect Wallet to Subscribe'; connectBtn.disabled = false;
+  var limitMsg = document.getElementById('premium-limit-msg');
+  if (limitMsg) limitMsg.textContent = 'You\u2019ve used all ' + FREE_AI_LIFETIME_LIMIT + ' free AI messages.';
+  window._premiumPrice = null;
   // Load LCAI price
   var priceEl = document.getElementById('premium-price-display');
   priceEl.textContent = 'Loading current LCAI price…';
   try {
     var r = await fetch(BACKEND + '/api/lw/price');
     var p = await r.json();
+    window._premiumPrice = p;
     var ownerEl = document.getElementById('premium-owner-addr');
     if (ownerEl) ownerEl.textContent = p.owner_wallet;
     priceEl.innerHTML =
@@ -870,6 +971,7 @@ const STRINGS = {
   en: {
     welcome_title: 'Welcome to LightWeather',
     welcome_sub: 'Tap 📍 for your local weather, or search any city in the world.',
+    lightchain_tagline: 'AI answers powered by Lightchain nodes — not Google, not OpenAI.',
     loading: 'Getting weather…',
     search_placeholder: 'City, zip code, or coordinates…',
     feels_like: 'Feels like',
