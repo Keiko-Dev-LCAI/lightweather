@@ -443,6 +443,117 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .lightchain-tagline {
   font-size: 18px; color: var(--purple); margin-top: 10px; line-height: 1.5; font-weight: 600;
 }
+
+.fc-icon-img { width: 96px; height: 96px; margin: 0 auto 4px; display: block; }
+
+/* ══════════════════════════════════════════════════
+   DESKTOP DASHBOARD  (min-width: 900px)
+   Fit current weather + 7-day forecast on one screen.
+   ══════════════════════════════════════════════════ */
+@media (min-width: 900px) {
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    display: flex; flex-direction: column;
+    padding-bottom: 0; min-height: 0;
+  }
+
+  .header {
+    flex-shrink: 0;
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 8px 12px; padding: 8px 16px 8px;
+  }
+  .header-top { margin-bottom: 0; flex: 0 0 auto; }
+  .search-row { flex: 1 1 280px; min-width: 220px; margin: 0; }
+  .places-panel { width: 100%; max-height: 180px; }
+
+  .alert-banner { margin: 0 16px 0; padding: 8px 12px; font-size: 14px; }
+  .alert-title { font-size: 15px; margin-bottom: 2px; }
+  .alert-dismiss { font-size: 13px; margin-top: 4px; padding: 4px 10px; }
+
+  #main-content {
+    flex: 1; min-height: 0; overflow: hidden;
+  }
+
+  .weather-dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.85fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    height: 100%;
+    padding: 8px 16px 6px;
+    box-sizing: border-box;
+  }
+  .dashboard-primary { grid-column: 1; grid-row: 1; min-height: 0; }
+  .dashboard-side {
+    grid-column: 2; grid-row: 1;
+    display: flex; flex-direction: column; gap: 8px;
+    min-height: 0; overflow: hidden;
+  }
+  .dashboard-forecast { grid-column: 1 / -1; grid-row: 2; }
+
+  .weather-main { padding: 0; }
+  .location-name { font-size: 22px; }
+  .location-sub { font-size: 14px; margin-bottom: 6px; }
+  .current-card { padding: 12px 14px; margin-bottom: 0; }
+  .temp-row { margin-bottom: 10px; gap: 12px; }
+  .temp-big { font-size: 58px; letter-spacing: -2px; }
+  .condition-text { font-size: 18px; }
+  .feels-like { font-size: 14px; }
+  .condition-icon { width: 52px; height: 52px; }
+  .details-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .detail-item { padding: 8px 10px; }
+  .detail-label { font-size: 12px; }
+  .detail-value { font-size: 16px; }
+
+  .ai-section { margin: 0; }
+  .ai-toggle-btn { font-size: 15px; padding: 10px 12px; }
+  .ai-counter { font-size: 12px; padding-top: 4px; }
+  .ai-chat-log { max-height: 120px; }
+  .ai-bubble { font-size: 14px; padding: 8px 10px; }
+
+  .sun-row { margin: 0; gap: 8px; }
+  .sun-card { padding: 8px 10px; }
+  .sun-icon { font-size: 26px; margin-bottom: 2px; }
+  .sun-label { font-size: 12px; margin-bottom: 2px; }
+  .sun-time { font-size: 17px; }
+
+  .pollen-section { padding: 0; }
+  .pollen-row { gap: 8px; }
+  .pollen-item { padding: 8px 10px; min-width: 0; }
+  .pollen-emoji { font-size: 28px; margin-bottom: 2px; }
+  .pollen-label { font-size: 12px; margin-bottom: 2px; }
+  .pollen-val { font-size: 16px; }
+
+  .forecast-section { padding: 0; }
+  .section-label { font-size: 13px; margin-bottom: 6px; }
+  .forecast-scroll {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .forecast-card {
+    flex: none; min-width: 0;
+    padding: 8px 4px; border-radius: 12px;
+  }
+  .fc-icon-img { width: 32px; height: 32px; }
+  .fc-icon { font-size: 26px; margin-bottom: 4px; }
+  .fc-day { font-size: 12px; margin-bottom: 4px; }
+  .fc-high { font-size: 15px; }
+  .fc-low { font-size: 12px; }
+  .fc-rain { font-size: 11px; margin-top: 2px; }
+
+  .footer {
+    flex-shrink: 0;
+    padding: 5px 16px 6px;
+    margin-top: 0;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .state-box { padding: 40px 20px; }
+}
 </style>
 <script type="module">
   try {
@@ -1287,7 +1398,7 @@ function renderWeather(data) {
     var rainChance = day.day.daily_chance_of_rain;
     return '<div class="forecast-card' + (i === 0 ? ' today' : '') + '">' +
       '<div class="fc-day">' + dayLabel + '</div>' +
-      (fcIcon ? '<img src="' + fcIcon + '" style="width:96px;height:96px;margin:0 auto 4px;display:block">' : '<div class="fc-icon">🌤</div>') +
+      (fcIcon ? '<img class="fc-icon-img" src="' + fcIcon + '">' : '<div class="fc-icon">🌤</div>') +
       '<div class="fc-high">' + tempNum(day.day.maxtemp_c) + '°</div>' +
       '<div class="fc-low">' + tempNum(day.day.mintemp_c) + '°</div>' +
       (rainChance > 10 ? '<div class="fc-rain">💧 ' + rainChance + '%</div>' : '') +
@@ -1298,7 +1409,9 @@ function renderWeather(data) {
   var todaySun = fc[0] ? fc[0].astro : {};
 
   // Build main HTML
-  var html = '<div class="weather-main">' +
+  var html = '<div class="weather-dashboard">' +
+  '<div class="dashboard-primary">' +
+  '<div class="weather-main">' +
     '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:4px;">' +
       '<div class="location-name" style="margin-bottom:0">' + escHtml(loc.name) + '</div>' +
       '<button id="save-place-btn" class="save-place-btn" onclick="saveCurrentPlace()">⭐ Save Place</button>' +
@@ -1328,6 +1441,9 @@ function renderWeather(data) {
       '</div>' +
     '</div>' +
   '</div>' +
+  '</div>' +
+
+  '<div class="dashboard-side">' +
 
   // AI Chat
   '<div class="ai-section">' +
@@ -1351,10 +1467,16 @@ function renderWeather(data) {
   // Pollen
   buildPollenSection(fc[0] ? fc[0].day : {}) +
 
+  '</div>' +
+
   // 7-day forecast
+  '<div class="dashboard-forecast">' +
   '<div class="forecast-section">' +
     '<div class="section-label">' + t('seven_day') + '</div>' +
     '<div class="forecast-scroll">' + fcCards + '</div>' +
+  '</div>' +
+  '</div>' +
+
   '</div>';
 
   document.getElementById('main-content').innerHTML = html;
