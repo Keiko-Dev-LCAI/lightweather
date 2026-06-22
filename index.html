@@ -561,6 +561,12 @@ body { min-height: 100vh; padding-bottom: 40px; }
     window.WCEthereumProvider = EthereumProvider;
   } catch(e) { console.warn('WalletConnect unavailable:', e); }
 </script>
+<style>
+  .keiko-android-install { text-align:center; padding:12px 16px 14px; border-top:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.25); }
+  .keiko-android-install a { display:inline-block; background:#00d4ff; color:#000; font-weight:800; font-size:15px; padding:10px 18px; border-radius:10px; text-decoration:none; }
+  .keiko-android-install a:hover { opacity:0.9; }
+  .keiko-android-install p { margin-top:6px; font-size:12px; opacity:0.65; }
+</style>
 </head>
 <body>
 
@@ -1710,5 +1716,11 @@ function escHtml(s) {
 </script>
 <!-- X HANDLE -->
 <div style="text-align:center;padding:6px 16px 12px;font-size:13px;opacity:0.65;"><a href="https://x.com/KeikoDevLCAI" target="_blank" rel="noopener" style="color:#9b7fe8;text-decoration:none;font-weight:600;">𝕏 @KeikoDevLCAI</a></div>
+
+<div class="keiko-android-install">
+  <a href="LightWeather.apk" download>📲 Download Android App</a>
+  <p>Download → open file → Install. Allow unknown apps if asked.</p>
+</div>
+
 </body>
 </html>
