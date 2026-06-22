@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ai.lightchain.lightweather",
+      "sha256_cert_fingerprints": [
+        "04:F7:80:22:75:3C:6B:09:DB:8F:26:1C:F5:30:57:E5:45:38:44:FF:91:E1:14:F2:EF:16:13:17:0A:21:60:53"
+      ]
+    }
+  }
+]
