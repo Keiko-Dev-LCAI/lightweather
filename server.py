@@ -8,7 +8,55 @@ from flask_cors import CORS
 import requests as _requests
 
 app = Flask(__name__)
-CORS(app, origins="*")
+_CORS_ORIGINS = [o.strip() for o in __import__('os').environ.get(
+    'CORS_ORIGINS',
+    'https://lightweather.win,http://localhost:5000,http://127.0.0.1:5000'
+).split(',') if o.strip()]
+CORS(app, origins=_CORS_ORIGINS)
+
+# ── AIVM abuse guards (open-endpoints audit 2026-08-22) ─────────────────────
+from datetime import datetime, timezone as _tz
+_CHAT_RATE_PER_MIN = int(os.environ.get("CHAT_RATE_PER_MIN", "5"))
+_CHAT_RATE_PER_DAY = int(os.environ.get("CHAT_RATE_PER_DAY", "30"))
+_DAILY_LCAI_CAP = float(os.environ.get("DAILY_LCAI_CAP", "50"))
+_LCAI_PER_JOB = float(os.environ.get("LCAI_PER_JOB", "0.02"))
+_MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT_JOBS", "8"))
+_rate_lock = threading.Lock(); _rate_hits = {}
+_spend_lock = threading.Lock(); _spend_day = ""; _spend_jobs = 0
+_active = 0; _active_lock = threading.Lock()
+
+def _client_ip():
+    xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return xff or (request.remote_addr or "unknown")
+
+def _gate_ai():
+    global _spend_day, _spend_jobs, _active
+    ip = _client_ip(); now = time.time(); day = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+    with _rate_lock:
+        rec = _rate_hits.get(ip)
+        if not rec or rec.get("day") != day:
+            rec = {"day": day, "hits": []}; _rate_hits[ip] = rec
+        hits = [t for t in rec["hits"] if now - t < 86400]
+        if len([t for t in hits if now - t < 60]) >= _CHAT_RATE_PER_MIN:
+            return False, 429, "Too many requests — wait a minute and try again."
+        if len(hits) >= _CHAT_RATE_PER_DAY:
+            return False, 429, "Daily limit reached — try again tomorrow."
+        hits.append(now); rec["hits"] = hits
+    with _active_lock:
+        if _active >= _MAX_CONCURRENT:
+            return False, 503, "AI is busy right now — give it a moment and try again."
+        _active += 1
+    with _spend_lock:
+        if _spend_day != day: _spend_day = day; _spend_jobs = 0
+        if _spend_jobs * _LCAI_PER_JOB >= _DAILY_LCAI_CAP:
+            with _active_lock: _active = max(0, _active - 1)
+            return False, 503, "AI is at capacity for today — please try again tomorrow."
+        _spend_jobs += 1
+    return True, 200, ""
+
+def _ungate_ai():
+    global _active
+    with _active_lock: _active = max(0, _active - 1)
 
 WEATHERAPI_KEY = os.environ.get("WEATHERAPI_KEY", "")
 WEATHERAPI_BASE = "https://api.weatherapi.com/v1"
@@ -560,6 +608,16 @@ def explain_weather():
     if not summary:
         return jsonify({'error': 'summary required'}), 400
 
+    # Rate-limit paid AIVM (subscription does not unlock unlimited abuse)
+    ok, code, err = _gate_ai()
+    if not ok:
+        return jsonify({'error': err, 'explanation': _fallback_explanation(summary, language)}), code
+    try:
+        return _explain_weather_inner(summary, language, chat_mode)
+    finally:
+        _ungate_ai()
+
+def _explain_weather_inner(summary, language, chat_mode):
     if chat_mode:
         # In chat mode the frontend sends the full ready-to-go prompt
         prompt = summary
