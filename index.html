@@ -1724,5 +1724,12 @@ function escHtml(s) {
   <p>Download → open file → Install. Allow unknown apps if asked.</p>
 </div>
 
+
+<!-- Get LCAI with ETH — on-ramp (self-hosted, isolated ethers; non-custodial). -->
+<script>window.__glwPrevEthers = window.ethers;</script>
+<script src="./getlcai/ethers-6.13.2.umd.min.js"></script>
+<script>window.__getlcaiEthers = window.ethers; window.ethers = window.__glwPrevEthers; try{delete window.__glwPrevEthers;}catch(e){}</script>
+<script src="./getlcai/eth-pay.js"></script>
+<script src="./getlcai/getlcai-widget.js"></script>
 </body>
 </html>
