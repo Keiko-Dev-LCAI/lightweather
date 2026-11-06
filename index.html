@@ -136,11 +136,22 @@ body { min-height: 100vh; padding-bottom: 40px; }
 }
 .ai-chat-panel.open { display: block; }
 .ai-chat-log {
-  background: var(--bg2); padding: 16px 18px; max-height: 420px; overflow: auto;
-  resize: vertical; min-height: 80px;
+  background: var(--bg2); padding: 16px 18px; max-height: 420px; overflow-y: auto;
+  min-height: 80px;
   display: flex; flex-direction: column; gap: 12px;
   scrollbar-width: thin; scrollbar-color: var(--purple) transparent;
 }
+.ai-resize-grip {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; min-height: 44px; padding: 10px 0;
+  border: none; border-top: 1px solid var(--border);
+  background: var(--bg3); cursor: ns-resize; touch-action: none; user-select: none;
+}
+.ai-resize-grip:hover,
+.ai-resize-grip.dragging { background: var(--purple-glow); }
+.ai-resize-grip:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }
+.ai-grip-lines { display: flex; flex-direction: column; gap: 3px; width: 72px; }
+.ai-grip-lines span { display: block; height: 3px; border-radius: 2px; background: var(--purple); }
 .ai-msg { display: flex; gap: 10px; align-items: flex-start; }
 .ai-msg.user { flex-direction: row-reverse; }
 .ai-bubble {
@@ -522,7 +533,7 @@ body { min-height: 100vh; padding-bottom: 40px; }
   .ai-toggle-btn { font-size: 15px; padding: 10px 12px; }
   .ai-counter { font-size: 12px; padding-top: 4px; }
   .dashboard-side { overflow-y: auto; }
-  .ai-chat-log { height: 140px; max-height: 80vh; resize: vertical; }
+  .ai-chat-log { height: 140px; max-height: 80vh; }
   .ai-explain-btn { font-size: 14px; }
   .ai-bubble { font-size: 14px; padding: 8px 10px; }
 
@@ -1478,6 +1489,9 @@ function renderWeather(data) {
     '<div id="ai-counter" class="ai-counter"></div>' +
     '<div class="ai-chat-panel" id="ai-chat-panel">' +
       '<div class="ai-chat-log" id="ai-chat-log"></div>' +
+      '<button type="button" class="ai-resize-grip" id="ai-resize-grip" aria-label="Drag to resize the answer" title="Drag to resize">' +
+        '<span class="ai-grip-lines" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></span>' +
+      '</button>' +
       '<button type="button" class="ai-explain-btn" id="ai-explain-btn" onclick="explainForecast()">' + t('ai_explain') + '</button>' +
       '<div class="ai-chat-input-row">' +
         '<input class="ai-chat-input" id="ai-chat-input" type="text" placeholder="Ask anything about the weather…" maxlength="200" onkeydown="if(event.key===\'Enter\')sendAiMessage()">' +
@@ -1698,6 +1712,58 @@ function resetAiChat() {
   var panel = document.getElementById('ai-chat-panel');
   if (panel) { panel.classList.remove('open'); panel.innerHTML = ''; }
 }
+
+(function() {
+  var drag = null;
+  function collapsedMin() {
+    return window.matchMedia('(min-width: 900px)').matches ? 140 : 80;
+  }
+  function clampH(px) {
+    var min = collapsedMin();
+    var max = Math.max(min, Math.round(window.innerHeight * 0.8));
+    return Math.round(Math.min(max, Math.max(min, px)));
+  }
+  function applyH(log, px) {
+    var h = clampH(px);
+    log.style.height = h + 'px';
+    log.style.maxHeight = h + 'px';
+  }
+  document.addEventListener('pointerdown', function(e) {
+    if (!e.isPrimary || e.button !== 0) return;
+    var grip = e.target.closest && e.target.closest('#ai-resize-grip');
+    if (!grip) return;
+    var log = document.getElementById('ai-chat-log');
+    if (!log) return;
+    e.preventDefault();
+    drag = { id: e.pointerId, y: e.clientY, h: log.getBoundingClientRect().height, grip: grip };
+    grip.classList.add('dragging');
+    try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  document.addEventListener('pointermove', function(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var log = document.getElementById('ai-chat-log');
+    if (!log) return;
+    e.preventDefault();
+    applyH(log, drag.h + (e.clientY - drag.y));
+  });
+  function endDrag(e) {
+    if (!drag || (e && e.pointerId !== drag.id)) return;
+    if (drag.grip) drag.grip.classList.remove('dragging');
+    drag = null;
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    var grip = e.target && e.target.closest && e.target.closest('#ai-resize-grip');
+    if (!grip) return;
+    var log = document.getElementById('ai-chat-log');
+    if (!log) return;
+    e.preventDefault();
+    var step = e.shiftKey ? 80 : 32;
+    applyH(log, log.getBoundingClientRect().height + (e.key === 'ArrowDown' ? step : -step));
+  });
+})();
 
 // ════════════════════════════════════════════════════════════════
 // HELPERS
