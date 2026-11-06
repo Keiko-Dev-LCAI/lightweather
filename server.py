@@ -613,7 +613,7 @@ def explain_weather():
     # Rate-limit paid AIVM (subscription does not unlock unlimited abuse)
     ok, code, err = _gate_ai()
     if not ok:
-        return jsonify({'error': err, 'explanation': _fallback_explanation(summary, language)}), code
+        return jsonify({'error': err, 'explanation': _fallback_explanation(summary, language), 'fallback': True}), code
     try:
         return _explain_weather_inner(summary, language, chat_mode)
     finally:
@@ -639,14 +639,18 @@ def _explain_weather_inner(summary, language, chat_mode):
 
     client = get_aivm()
     if not client:
-        return jsonify({'explanation': _fallback_explanation(summary, language)})
+        return jsonify({'explanation': _fallback_explanation(summary, language), 'fallback': True})
 
     try:
-        result = client.run_inference(prompt, timeout_secs=180)
+        # Stay under the gunicorn --timeout 240 so this returns the fallback
+        # instead of the worker being killed mid-request.
+        result = (client.run_inference(prompt, timeout_secs=180) or "").strip()
+        if not result or result == "No response from AIVM worker":
+            return jsonify({'explanation': _fallback_explanation(summary, language), 'fallback': True})
         return jsonify({'explanation': result})
     except Exception as e:
         print(f"[AIVM] error: {e}")
-        return jsonify({'explanation': _fallback_explanation(summary, language)})
+        return jsonify({'explanation': _fallback_explanation(summary, language), 'fallback': True})
 
 def _fallback_explanation(summary, language):
     """Simple rule-based fallback if AIVM is unavailable."""

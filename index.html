@@ -1570,7 +1570,6 @@ function toggleAiChat() {
     }
     // Send an automatic greeting/explanation on first open
     if (aiChatHistory.length === 0) {
-      if (!consumeAiMessage()) { aiChatOpen = false; panel.classList.remove('open'); showPremiumModal(); return; }
       aiWeatherContext = buildWeatherContext();
       btn.textContent = t('ai_loading');
       btn.disabled = true;
@@ -1641,10 +1640,14 @@ async function sendAiRequest(userText, isAuto) {
       body: JSON.stringify({summary: prompt, language: currentLang, chat_mode: true})
     });
     var data = await r.json();
-    var reply = data.explanation || 'Sorry, I couldn\'t get a response. Please try again.';
+    var reply = (data.explanation || '').trim();
+    var real = r.ok && !!reply && data.fallback !== true && reply.indexOf('AI assistant is warming up') === -1;
+    if (!reply) reply = 'Sorry, I couldn\'t get a response. Please try again.';
+    if (reply === 'Sorry, I couldn\'t get a response. Please try again.') real = false;
     removeTyping();
     aiChatHistory.push({role:'assistant', text: reply});
     renderChatLog();
+    if (!isAuto && real) consumeAiMessage();
   } catch(e) {
     removeTyping();
     var errMsg = 'Could not reach the AI assistant. Please check your connection.';
@@ -1662,7 +1665,6 @@ async function sendAiMessage() {
   if (!text || !currentWeatherData) return;
   // Check limit
   if (aiMessagesLeft() <= 0) { showPremiumModal(); return; }
-  if (!consumeAiMessage()) { showPremiumModal(); return; }
   input.value = '';
   if (!aiWeatherContext) aiWeatherContext = buildWeatherContext();
   await sendAiRequest(text, false);
