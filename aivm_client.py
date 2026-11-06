@@ -22,6 +22,11 @@ from urllib.parse import quote as url_quote
 AIVM_GATEWAY = "https://chat-api.mainnet.lightchain.ai"
 AIVM_RELAY = "wss://relay.mainnet.lightchain.ai/ws"
 AIVM_RPC = "https://rpc.mainnet.lightchain.ai"
+AIVM_BEACON = "https://beacon.mainnet.lightchain.ai"
+# JobCompleted(uint256 indexed jobId, address indexed worker, bytes32 responseHash, bytes32 ciphertextHash)
+_JOB_COMPLETED_TOPIC = "0xdb545db74bae046337ed01971cf61569fd1a1460ff8ed511ab19ceaac1326377"
+# A job still Submitted after this is not going to be served.
+_ACK_GIVE_UP_SECS = 90
 AIVM_JOB_REG = "0xfB15F90298e4CcD7106E76fFB5e520315cC42B0b"
 AIVM_JOB_FEE = 20_000_000_000_000_000       # 0.02 LCAI — one job
 AIVM_PREPAY = 400_000_000_000_000_000       # 0.4 LCAI prepaid — ~20 jobs, not a drain
@@ -155,6 +160,41 @@ def _hex0x(b):
     return "0x" + bytes(b).hex()
 
 
+def _hex0x_any(value):
+    if isinstance(value, (bytes, bytearray)):
+        return "0x" + bytes(value).hex()
+    text = str(value)
+    return text if text.startswith("0x") or text.startswith("0X") else "0x" + text
+
+
+def _collapse_repeat(text):
+    """A long answer sometimes arrives twice, back to back. Keep one copy."""
+    n = len(text)
+    if n >= 48 and n % 2 == 0 and text[: n // 2] == text[n // 2 :]:
+        return text[: n // 2]
+    return text
+
+
+def _blob_ciphertext(blob):
+    """Pull the AES-GCM ciphertext out of one EIP-4844 blob.
+
+    Field elements are 32 bytes with a zero top byte. The packed bytes start
+    with a big-endian uint32 length, then the ciphertext (nonce || ct || tag).
+    keccak256 of that ciphertext is JobCompleted.ciphertextHash.
+    """
+    if len(blob) != 131072:
+        raise ValueError(f"blob is {len(blob)} bytes, expected 131072")
+    packed = bytearray()
+    for i in range(0, len(blob), 32):
+        if blob[i] != 0:
+            raise ValueError("blob field element is not a data element")
+        packed.extend(blob[i + 1:i + 32])
+    length = int.from_bytes(packed[:4], "big")
+    if length < 28 or 4 + length > len(packed):
+        raise ValueError(f"blob ciphertext length {length} is out of range")
+    return bytes(packed[4:4 + length])
+
+
 def _parse_jwt_exp(expires_at):
     """Parse consumer-api expiresAt as UTC seconds. Naive timestamps treated as UTC."""
     from datetime import datetime, timezone
@@ -265,9 +305,13 @@ class AIVMClient:
         r.raise_for_status()
         message = r.json()["message"]
         sig = self._account.sign_message(encode_defunct(text=message))
+        # Some eth-account builds include 0x in signature.hex(), some do not.
+        sig_hex = str(sig.signature.hex())
+        if not sig_hex.startswith("0x"):
+            sig_hex = "0x" + sig_hex
         r2 = self._req.post(
             f"{AIVM_GATEWAY}/api/auth/verify",
-            json={"message": message, "signature": "0x" + sig.signature.hex()},
+            json={"message": message, "signature": sig_hex},
             timeout=15,
         )
         r2.raise_for_status()
@@ -371,6 +415,101 @@ class AIVMClient:
             f"(balance={prepaid}, delegateAuthorized={authorized})"
         )
 
+    def _rpc(self, method, params):
+        resp = self._w3.provider.make_request(method, params)
+        err = resp.get("error")
+        if err:
+            raise RuntimeError(err.get("message") or "rpc error")
+        return resp.get("result")
+
+    def _chain_answer(self, job_id, session_key, from_block):
+        """Decrypt the worker's on-chain blob once JobCompleted is in.
+
+        Returns the plaintext, or None when the job is not completed yet.
+        Raises when the completion is in but the blob cannot be read.
+        """
+        topic_job = "0x" + int(job_id).to_bytes(32, "big").hex()
+        logs = self._rpc("eth_getLogs", [{
+            "fromBlock": hex(int(from_block)),
+            "toBlock": "latest",
+            "address": AIVM_JOB_REG,
+            "topics": [_JOB_COMPLETED_TOPIC, topic_job],
+        }]) or []
+        if not logs:
+            return None
+        data = bytes.fromhex(logs[-1]["data"][2:])
+        if len(data) < 64:
+            raise RuntimeError("JobCompleted data is short")
+        response_hash = "0x" + data[:32].hex()
+        ciphertext_hash = data[32:64]
+        completion = int(logs[-1]["blockNumber"], 16)
+        blob_block = None
+        for n in range(completion, max(0, completion - 48) - 1, -1):
+            block = self._rpc("eth_getBlockByNumber", [hex(n), True])
+            for tx in block.get("transactions") or []:
+                hashes = [h.lower() for h in (tx.get("blobVersionedHashes") or [])]
+                if response_hash.lower() in hashes:
+                    blob_block = block
+                    break
+            if blob_block:
+                break
+        if not blob_block:
+            raise RuntimeError("response blob tx not in the completion window")
+        parent = _hex0x_any(blob_block["parentBeaconBlockRoot"])
+        headers = self._req.get(
+            f"{AIVM_BEACON}/eth/v1/beacon/headers",
+            params={"parent_root": parent},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        headers.raise_for_status()
+        rows = headers.json().get("data") or []
+        if not rows:
+            raise RuntimeError("beacon has not published the blob slot yet")
+        slot = rows[0]["header"]["message"]["slot"]
+        blobs = self._req.get(
+            f"{AIVM_BEACON}/eth/v1/beacon/blobs/{slot}",
+            params={"versioned_hashes": response_hash},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=30,
+        )
+        blobs.raise_for_status()
+        encoded = (blobs.json().get("data") or [None])[0]
+        if not encoded:
+            raise RuntimeError("beacon blob list was empty")
+        cipher = _blob_ciphertext(bytes.fromhex(encoded[2:]))
+        from web3 import Web3
+        if bytes(Web3.keccak(cipher)) != ciphertext_hash:
+            raise RuntimeError("blob ciphertext does not match JobCompleted")
+        text = _aes_decrypt(session_key, cipher).decode("utf-8", errors="replace")
+        stripped = text.strip()
+        if not stripped:
+            return None
+        if stripped.startswith("{") and "promptTokens" in stripped:
+            return None
+        return text
+
+    def _job_state(self, job_id):
+        """JobState from getJob. None when the call returns nothing.
+
+        0 Submitted, 1 Acknowledged, 2 Completed, 3 TimedOut.
+        """
+        from web3 import Web3
+        selector = Web3.keccak(text="getJob(uint256)")[:4].hex()
+        if selector.startswith("0x"):
+            selector = selector[2:]
+        arg = int(job_id).to_bytes(32, "big").hex()
+        raw = self._rpc("eth_call", [{
+            "to": AIVM_JOB_REG,
+            "data": "0x" + selector + arg,
+        }, "latest"])
+        if not raw or raw == "0x":
+            return None
+        data = bytes.fromhex(raw[2:])
+        if len(data) < 96:
+            return None
+        return int.from_bytes(data[64:96], "big")
+
     def run_inference(self, prompt, timeout_secs=360):
         with _aivm_tx_lock:
             self._local_nonce = None
@@ -461,8 +600,13 @@ class AIVMClient:
 
         def _on_message(ws_obj, message):
             try:
+                if isinstance(message, (bytes, bytearray)):
+                    message = bytes(message).decode("utf-8")
                 frame = json.loads(message)
             except Exception:
+                return
+            ftype = frame.get("type")
+            if ftype == "metadata":
                 return
             payload = frame.get("payload")
             if payload:
@@ -481,7 +625,6 @@ class AIVMClient:
                     seen_seq.add(seq)
                 except Exception:
                     pass
-            ftype = frame.get("type")
             if ftype == "complete":
                 complete.set()
             elif ftype == "error":
@@ -530,20 +673,56 @@ class AIVMClient:
         )
         job_id = submitted.get("jobId")
         print(f"  [AIVM] jobId: {job_id}", flush=True)
+        try:
+            from_block = self._w3.eth.block_number
+        except Exception:
+            from_block = 0
 
         deadline = time.time() + timeout_secs
-        while time.time() < deadline and not complete.is_set():
+        submitted_at = time.time()
+        chain_text = None
+        give_up = None
+        next_chain_check = time.time() + 12
+        while time.time() < deadline and not complete.is_set() and chain_text is None and give_up is None:
             time.sleep(1)
-        time.sleep(2)
+            if chunks or not job_id or time.time() < next_chain_check:
+                continue
+            next_chain_check = time.time() + 4
+            try:
+                chain_text = self._chain_answer(job_id, session_key, from_block)
+            except Exception as exc:
+                print(f"  [AIVM] chain answer not ready: {exc}", flush=True)
+                chain_text = None
+            if chain_text is not None or chunks:
+                continue
+            if time.time() - submitted_at < _ACK_GIVE_UP_SECS:
+                continue
+            try:
+                state = self._job_state(job_id)
+            except Exception as exc:
+                print(f"  [AIVM] job state unread: {exc}", flush=True)
+                continue
+            if state == 0:
+                give_up = f"Worker never acknowledged job {job_id} after {_ACK_GIVE_UP_SECS}s"
+            elif state == 3:
+                give_up = f"Job {job_id} timed out before an answer"
+        if chain_text is None and give_up is None:
+            time.sleep(2)
         try:
             ws.close()
         except Exception:
             pass
+        if give_up:
+            raise RuntimeError(give_up)
 
-        result = "".join(chunks)
+        result = _collapse_repeat("".join(chunks))
         if result:
             print(f"  [AIVM] inference done (relay data), {len(result)} chars", flush=True)
             return result
+        if chain_text:
+            chain_text = _collapse_repeat(chain_text)
+            print(f"  [AIVM] inference done (chain blob), {len(chain_text)} chars", flush=True)
+            return chain_text
         if ws_err[0]:
             raise RuntimeError(f"AIVM worker error: {ws_err[0]}")
         raise RuntimeError(f"Timeout after {timeout_secs}s waiting for sortition answer")
