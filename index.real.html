@@ -151,6 +151,13 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .ai-msg.bot  .ai-bubble { border: 1px solid var(--border); }
 .ai-msg.typing .ai-bubble { color: var(--text2); font-style: italic; }
 .ai-avatar { font-size: 40px; flex-shrink: 0; margin-top: 4px; }
+.ai-explain-btn {
+  width: 100%; min-height: 44px; padding: 10px 14px; text-align: left;
+  background: transparent; border: none; border-top: 1px solid var(--border);
+  color: var(--purple); font-size: 18px; font-weight: 650; cursor: pointer;
+}
+.ai-explain-btn:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }
+.ai-explain-btn:disabled { opacity: 0.5; cursor: default; }
 .ai-chat-input-row {
   display: flex; gap: 10px; padding: 12px 14px; background: var(--bg3);
   border-top: 1px solid var(--border);
@@ -516,6 +523,7 @@ body { min-height: 100vh; padding-bottom: 40px; }
   .ai-counter { font-size: 12px; padding-top: 4px; }
   .dashboard-side { overflow-y: auto; }
   .ai-chat-log { height: 140px; max-height: 80vh; resize: vertical; }
+  .ai-explain-btn { font-size: 14px; }
   .ai-bubble { font-size: 14px; padding: 8px 10px; }
 
   .sun-row { margin: 0; gap: 8px; }
@@ -1107,7 +1115,8 @@ const STRINGS = {
     sunrise: 'Sunrise',
     sunset: 'Sunset',
     seven_day: '7-Day Forecast',
-    ai_btn: '🤖 Explain this forecast',
+    ai_btn: '🤖 Ask about the weather',
+    ai_explain: '🤖 Explain this forecast',
     ai_loading: '🤖 Asking the AI…',
     today: 'Today',
     rain_chance: 'rain',
@@ -1131,7 +1140,8 @@ const STRINGS = {
     sunrise: '日出',
     sunset: '日落',
     seven_day: '7天预报',
-    ai_btn: '🤖 AI 解读天气',
+    ai_btn: '🤖 询问天气',
+    ai_explain: '🤖 AI 解读天气',
     ai_loading: '🤖 AI分析中…',
     today: '今天',
     rain_chance: '降雨',
@@ -1155,7 +1165,8 @@ const STRINGS = {
     sunrise: 'Amanecer',
     sunset: 'Atardecer',
     seven_day: 'Pronóstico 7 días',
-    ai_btn: '🤖 Explicar pronóstico',
+    ai_btn: '🤖 Preguntar el tiempo',
+    ai_explain: '🤖 Explicar pronóstico',
     ai_loading: '🤖 Consultando IA…',
     today: 'Hoy',
     rain_chance: 'lluvia',
@@ -1179,7 +1190,8 @@ const STRINGS = {
     sunrise: 'Lever du soleil',
     sunset: 'Coucher du soleil',
     seven_day: 'Prévisions 7 jours',
-    ai_btn: '🤖 Expliquer les prévisions',
+    ai_btn: '🤖 Demander la météo',
+    ai_explain: '🤖 Expliquer les prévisions',
     ai_loading: '🤖 Consultation IA…',
     today: 'Aujourd\'hui',
     rain_chance: 'pluie',
@@ -1203,7 +1215,8 @@ const STRINGS = {
     sunrise: '日の出',
     sunset: '日の入り',
     seven_day: '7日間予報',
-    ai_btn: '🤖 AI天気解説',
+    ai_btn: '🤖 天気を質問',
+    ai_explain: '🤖 AI天気解説',
     ai_loading: '🤖 AI分析中…',
     today: '今日',
     rain_chance: '降水',
@@ -1227,7 +1240,8 @@ const STRINGS = {
     sunrise: '일출',
     sunset: '일몰',
     seven_day: '7일 예보',
-    ai_btn: '🤖 AI 날씨 해설',
+    ai_btn: '🤖 날씨 질문',
+    ai_explain: '🤖 AI 날씨 해설',
     ai_loading: '🤖 AI 분석 중…',
     today: '오늘',
     rain_chance: '강수',
@@ -1464,6 +1478,7 @@ function renderWeather(data) {
     '<div id="ai-counter" class="ai-counter"></div>' +
     '<div class="ai-chat-panel" id="ai-chat-panel">' +
       '<div class="ai-chat-log" id="ai-chat-log"></div>' +
+      '<button type="button" class="ai-explain-btn" id="ai-explain-btn" onclick="explainForecast()">' + t('ai_explain') + '</button>' +
       '<div class="ai-chat-input-row">' +
         '<input class="ai-chat-input" id="ai-chat-input" type="text" placeholder="Ask anything about the weather…" maxlength="200" onkeydown="if(event.key===\'Enter\')sendAiMessage()">' +
         '<button class="ai-send-btn" id="ai-send-btn" onclick="sendAiMessage()">➤</button>' +
@@ -1573,15 +1588,6 @@ function toggleAiChat() {
       showPremiumModal();
       return;
     }
-    if (aiChatHistory.length === 0) {
-      aiWeatherContext = buildWeatherContext();
-      btn.textContent = t('ai_loading');
-      btn.disabled = true;
-      sendAiRequest('Please give me a friendly 2–3 sentence overview of today\'s weather and what to expect this week. Mention any alerts. Respond in language code: ' + currentLang, true).finally(function() {
-        btn.textContent = t('ai_btn');
-        btn.disabled = false;
-      });
-    }
     setTimeout(function() {
       var input = document.getElementById('ai-chat-input');
       if (input) input.focus();
@@ -1659,6 +1665,17 @@ async function sendAiRequest(userText, isAuto) {
   }
 
   if (sendBtn) sendBtn.disabled = false;
+}
+
+function explainForecast() {
+  if (!currentWeatherData) return;
+  if (aiMessagesLeft() <= 0) { showPremiumModal(); return; }
+  if (!aiWeatherContext) aiWeatherContext = buildWeatherContext();
+  var btn = document.getElementById('ai-explain-btn');
+  if (btn) btn.disabled = true;
+  sendAiRequest('Please give me a friendly 2–3 sentence overview of today\'s weather and what to expect this week. Mention any alerts. Respond in language code: ' + currentLang, false).finally(function() {
+    if (btn) btn.disabled = false;
+  });
 }
 
 async function sendAiMessage() {
