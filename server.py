@@ -132,7 +132,7 @@ def get_lcai_price():
 def lightchain_rpc(method, params):
     payload = json.dumps({'jsonrpc': '2.0', 'method': method, 'params': params, 'id': 1}).encode()
     req = _urllib_req.Request(
-        'https://node1.lightchain.ai', data=payload,
+        LCAI_RPC, data=payload,
         headers={'Content-Type': 'application/json', 'User-Agent': 'LightWeather/1.0'}
     )
     with _urllib_req.urlopen(req, timeout=15) as r:
