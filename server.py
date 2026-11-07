@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """LightWeather — Backend server. Weather data + AIVM forecast explanation + premium subscriptions."""
 
-import os, time, json, threading, sqlite3
+import hashlib, ipaddress, os, time, json, threading, sqlite3
 import urllib.request as _urllib_req
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -25,23 +25,55 @@ _rate_lock = threading.Lock(); _rate_hits = {}
 _spend_lock = threading.Lock(); _spend_day = ""; _spend_jobs = 0
 _active = 0; _active_lock = threading.Lock()
 
-def _client_ip():
-    xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
-    return xff or (request.remote_addr or "unknown")
+MAX_HTTP_BODY = int(os.environ.get("MAX_HTTP_BODY", str(1024 * 1024)))
+MAX_SUMMARY_CHARS = int(os.environ.get("MAX_SUMMARY_CHARS", "12000"))
+LW_AUTH_MAX_AGE = 600
 
-def _gate_ai():
-    global _spend_day, _spend_jobs, _active
-    ip = _client_ip(); now = time.time(); day = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+def _valid_ip(value):
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except Exception:
+        return False
+
+def _client_ip():
+    """Cloudflare client, otherwise the last proxy hop. The first hop is caller-chosen."""
+    cf = (request.headers.get("CF-Connecting-IP") or "").strip()
+    if _valid_ip(cf):
+        return cf
+    hops = [part.strip() for part in (request.headers.get("X-Forwarded-For") or "").split(",") if part.strip()]
+    for hop in reversed(hops):
+        if _valid_ip(hop):
+            return hop
+    return request.remote_addr or "unknown"
+
+def _note_rate(key, now, day):
     with _rate_lock:
-        rec = _rate_hits.get(ip)
+        rec = _rate_hits.get(key)
         if not rec or rec.get("day") != day:
-            rec = {"day": day, "hits": []}; _rate_hits[ip] = rec
+            rec = {"day": day, "hits": []}
+            _rate_hits[key] = rec
         hits = [t for t in rec["hits"] if now - t < 86400]
         if len([t for t in hits if now - t < 60]) >= _CHAT_RATE_PER_MIN:
+            rec["hits"] = hits
             return False, 429, "Too many requests — wait a minute and try again."
         if len(hits) >= _CHAT_RATE_PER_DAY:
+            rec["hits"] = hits
             return False, 429, "Daily limit reached — try again tomorrow."
-        hits.append(now); rec["hits"] = hits
+        hits.append(now)
+        rec["hits"] = hits
+        return True, 200, ""
+
+def _gate_ai(wallet=""):
+    global _spend_day, _spend_jobs, _active
+    now = time.time(); day = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+    ok, code, err = _note_rate("ip:" + _client_ip(), now, day)
+    if not ok:
+        return False, code, err
+    if wallet:
+        ok, code, err = _note_rate("wallet:" + wallet.lower(), now, day)
+        if not ok:
+            return False, code, err
     with _active_lock:
         if _active >= _MAX_CONCURRENT:
             return False, 503, "AI is busy right now — give it a moment and try again."
@@ -88,6 +120,47 @@ def init_db():
     conn.close()
 
 init_db()
+
+def _recover(message, signature):
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+    return Account.recover_message(encode_defunct(text=message), signature=signature).lower()
+
+def _signed_wallet(data, action, extra):
+    """LightWeather|action|wallet|unix|extra, recovered to that wallet."""
+    message = data.get("auth_message") if isinstance(data.get("auth_message"), str) else ""
+    signature = (data.get("signature") or "").strip()
+    wallet = (data.get("wallet") or "").strip().lower()
+    if not message or not signature or not (wallet.startswith("0x") and len(wallet) == 42):
+        return None
+    parts = message.split("|")
+    if len(parts) != 5 or parts[0] != "LightWeather" or parts[1] != action or parts[2] != wallet:
+        return None
+    if parts[4] != extra:
+        return None
+    try:
+        ts = int(parts[3])
+    except ValueError:
+        return None
+    if abs(int(time.time()) - ts) > LW_AUTH_MAX_AGE:
+        return None
+    try:
+        got = _recover(message, signature)
+    except Exception:
+        return None
+    if got != wallet:
+        return None
+    return wallet
+
+def _subscribed(wallet):
+    w = (wallet or "").lower()
+    if w in PREMIUM_WHITELIST:
+        return True
+    now = int(time.time())
+    conn = get_db()
+    row = conn.execute("SELECT expires_at FROM subscriptions WHERE wallet = ?", (w,)).fetchone()
+    conn.close()
+    return bool(row and row["expires_at"] and row["expires_at"] > now)
 
 # ── LCAI PRICE FEED (cached 5 min) ──────────────────────────────────────────
 _lcai_price_cache = {'price': 0.004, 'ts': 0}
@@ -170,18 +243,23 @@ def api_lw_verify_subscription():
     tx_hash  = (data.get('tx_hash') or '').strip()
     if not w or not tx_hash:
         return jsonify({'error': 'wallet and tx_hash required'}), 400
+    if _signed_wallet(data, "subscribe", tx_hash.lower()) != w:
+        return jsonify({'error': 'A wallet signature is required.'}), 401
     if w in PREMIUM_WHITELIST:
         return jsonify({'success': True, 'subscribed': True, 'whitelisted': True})
     try:
         result = lightchain_rpc('eth_getTransactionByHash', [tx_hash])
         tx = result.get('result')
-        if not tx:
+        if not tx or not tx.get('blockNumber'):
             return jsonify({'error': 'Transaction not found on Lightchain. Check the hash and try again.'}), 404
+        if (tx.get('from') or '').lower() != w:
+            return jsonify({'error': 'That payment is not from this wallet.'}), 400
         to_addr = (tx.get('to') or '').lower()
         if to_addr != OWNER_WALLET:
             return jsonify({'error': 'This transaction was not sent to the LightWeather subscription address.'}), 400
-        # Check amount
         price         = get_lcai_price()
+        if not price or float(price) <= 0:
+            return jsonify({'error': 'Could not verify the subscription price. Try again.'}), 503
         required_lcai = MONTHLY_PRICE_USD / price
         required_wei  = int(required_lcai * 1e18 * 0.95)   # 5% tolerance
         tx_value      = int(tx.get('value', '0x0'), 16)
@@ -189,16 +267,34 @@ def api_lw_verify_subscription():
             sent   = round(tx_value / 1e18, 4)
             needed = round(required_lcai, 2)
             return jsonify({'error': f'Insufficient amount — sent {sent} LCAI, needed ~{needed} LCAI'}), 400
-        # Check receipt
         try:
             rcpt = lightchain_rpc('eth_getTransactionReceipt', [tx_hash]).get('result')
-            if rcpt and rcpt.get('status') == '0x0':
-                return jsonify({'error': 'Transaction was reverted. Please send a new one.'}), 400
+            block = lightchain_rpc('eth_getBlockByNumber', [tx.get('blockNumber'), False]).get('result')
         except Exception:
-            pass
-        # Store 30-day subscription
-        expires_at = int(time.time()) + 30 * 24 * 60 * 60
+            return jsonify({'error': 'Could not verify the subscription. Try again.'}), 503
+        if not rcpt or rcpt.get('status') != '0x1':
+            return jsonify({'error': 'Transaction was reverted. Please send a new one.'}), 400
+        if not block:
+            return jsonify({'error': 'Could not verify the subscription. Try again.'}), 503
+        try:
+            paid_at = int(str(block.get('timestamp') or '0x0'), 16)
+        except ValueError:
+            return jsonify({'error': 'Could not verify the subscription. Try again.'}), 503
+        now = int(time.time())
+        if paid_at > now + 300 or now - paid_at > 30 * 24 * 60 * 60:
+            return jsonify({'error': 'The subscription payment is older than 30 days.'}), 400
         conn = get_db()
+        old = conn.execute(
+            'SELECT wallet, expires_at FROM subscriptions WHERE tx_hash = ?', (tx_hash,)
+        ).fetchone()
+        if old:
+            if old['wallet'] == w and old['expires_at'] and old['expires_at'] > now:
+                expires_at = old['expires_at']
+                conn.close()
+                return jsonify({'success': True, 'expires_at': expires_at})
+            conn.close()
+            return jsonify({'error': 'That payment was already used.'}), 400
+        expires_at = now + 30 * 24 * 60 * 60
         conn.execute(
             'INSERT OR REPLACE INTO subscriptions (wallet, expires_at, tx_hash) VALUES (?, ?, ?)',
             (w, expires_at, tx_hash)
@@ -417,17 +513,30 @@ def search_cities():
         print(f"[search] Open-Meteo failed for {q!r}: {e}")
         return jsonify([])
 
+@app.before_request
+def _limit_body():
+    if request.content_length is not None and request.content_length > MAX_HTTP_BODY:
+        return jsonify({'error': 'request is too large'}), 413
+
 @app.route('/api/explain', methods=['POST'])
 def explain_weather():
     data      = request.json or {}
     summary   = data.get('summary', '')
     language  = data.get('language', 'en')
     chat_mode = data.get('chat_mode', False)
-    if not summary:
+    if not isinstance(summary, str) or not summary:
         return jsonify({'error': 'summary required'}), 400
+    if len(summary) > MAX_SUMMARY_CHARS:
+        return jsonify({'error': 'message is too long'}), 413
+    extra = hashlib.sha256(summary.encode('utf-8')).hexdigest()
+    wallet = _signed_wallet(data, 'explain', extra)
+    if not wallet:
+        return jsonify({'error': 'A wallet signature is required.'}), 401
+    if not _subscribed(wallet):
+        return jsonify({'error': 'An active LightWeather subscription is required.'}), 402
 
-    # Rate-limit paid AIVM (subscription does not unlock unlimited abuse)
-    ok, code, err = _gate_ai()
+    # Rate-limit paid AIVM. The bucket is the signed wallet, not a spoofed address.
+    ok, code, err = _gate_ai(wallet)
     if not ok:
         return jsonify({'error': err, 'explanation': _fallback_explanation(summary, language), 'fallback': True}), code
     try:
@@ -479,6 +588,13 @@ def _fallback_explanation(summary, language):
         'ko': "날씨 데이터가 로드되었습니다. 잠시 후 AI 버튼을 다시 탭하세요.",
     }
     return fallbacks.get(language, fallbacks['en'])
+
+@app.after_request
+def _security_headers(resp):
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['X-Frame-Options'] = 'DENY'
+    resp.headers['Referrer-Policy'] = 'no-referrer'
+    return resp
 
 @app.route('/health')
 def health():

@@ -895,6 +895,21 @@ async function sendPremiumPayment() {
   }
 }
 
+async function lwSha256(text) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+async function lwAuth(action, extra) {
+  if (!premiumWallet || !window.ethereum || !window.ethereum.request) {
+    throw new Error('Connect the subscribed wallet to continue.');
+  }
+  var wallet = premiumWallet.toLowerCase();
+  var msg = 'LightWeather|' + action + '|' + wallet + '|' + Math.floor(Date.now() / 1000) + '|' + extra;
+  var signature = await window.ethereum.request({ method: 'personal_sign', params: [msg, premiumWallet] });
+  return { wallet: wallet, auth_message: msg, signature: signature };
+}
+
 async function verifySubscriptionTx(fromAutoSend) {
   var txHash = (document.getElementById('premium-tx-input').value || '').trim();
   var errEl  = document.getElementById('premium-error');
@@ -908,10 +923,11 @@ async function verifySubscriptionTx(fromAutoSend) {
   if (fromAutoSend && sendBtn) { sendBtn.textContent = 'Verifying payment…'; sendBtn.disabled = true; }
   errEl.textContent = '';
   try {
+    var auth = await lwAuth('subscribe', txHash.toLowerCase());
     var r = await fetch(BACKEND + '/api/lw/verify-subscription', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ wallet: premiumWallet, tx_hash: txHash })
+      body: JSON.stringify({ wallet: auth.wallet, tx_hash: txHash, auth_message: auth.auth_message, signature: auth.signature })
     });
     var data = await r.json();
     if (data.success) {
@@ -1639,6 +1655,10 @@ function removeTyping() {
 }
 
 async function sendAiRequest(userText, isAuto) {
+  if (!isPremiumActive || !premiumWallet) {
+    showPremiumModal();
+    return;
+  }
   if (!isAuto) {
     aiChatHistory.push({role:'user', text: userText});
     renderChatLog();
@@ -1657,12 +1677,24 @@ async function sendAiRequest(userText, isAuto) {
     historyText + (isAuto ? '' : '\nUser: ' + userText) + '\nAssistant:';
 
   try {
+    var auth = await lwAuth('explain', await lwSha256(prompt));
     var r = await fetch(BACKEND + '/api/explain', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({summary: prompt, language: currentLang, chat_mode: true})
+      body: JSON.stringify({
+        summary: prompt, language: currentLang, chat_mode: true,
+        wallet: auth.wallet, auth_message: auth.auth_message, signature: auth.signature
+      })
     });
     var data = await r.json();
+    if (!r.ok) {
+      removeTyping();
+      aiChatHistory.push({role:'assistant', text: data.error || 'An active subscription is required.'});
+      renderChatLog();
+      if (r.status === 401 || r.status === 402) showPremiumModal();
+      if (sendBtn) sendBtn.disabled = false;
+      return;
+    }
     var reply = (data.explanation || '').trim();
     var real = r.ok && !!reply && data.fallback !== true && reply.indexOf('AI assistant is warming up') === -1;
     if (!reply) reply = 'Sorry, I couldn\'t get a response. Please try again.';
